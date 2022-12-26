@@ -36,10 +36,13 @@ Currently it only supports OTP via email.
    <license>AGPL v3+</license>
    <tags>
       	<en>
-		<tag>Backup</tag>
+		<tag>Setup</tag>
+		<tag>Login</tag>
+		<tag>OTP</tag>
 	</en>
    </tags>
    <screenshots>
       <screenshot>https://raw.githubusercontent.com/ticgal/mfa/multimedia/mfa-glpi-plugin-1.png</screenshot>
    </screenshots>
 </root>
+	
