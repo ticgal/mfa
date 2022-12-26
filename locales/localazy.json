@@ -1,0 +1,22 @@
+{
+	"upload": {
+		"type": "pot",
+		"deprecate": "project",
+		"files": [
+			{
+				"pattern": "mfa.pot"
+			},
+			{
+				"group": "existing",
+				"file": "mfa.pot",
+				"pattern": "./*.po",
+				"type": "po",
+				"lang": "${autodetectLang}"
+			}
+		]
+	},
+	"download": {
+		"includeSourceLang": true,
+		"files": "${languageCode}_${regionCode}.po"
+	}
+}
