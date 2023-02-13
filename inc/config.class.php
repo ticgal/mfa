@@ -133,7 +133,7 @@ class PluginMfaConfig extends CommonDBTM
 		echo "<tr class='tab_bg_1'>";
 		echo "<td><label for='external'>".__('External Authentication','mfa')."</label></td>";
 		echo "<td>";
-		Dropdown::showYesNo("external", $config->fields['ldap']);
+		Dropdown::showYesNo("external", $config->fields['external']);
 		echo "</td>";
 		echo "</tr>";
 
