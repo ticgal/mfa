@@ -82,19 +82,6 @@ if (isset($_POST['code'])) {
 		$login_auth = '';
 	}
 
-	$authtype = $login_auth;
-	if ($login_auth == 'local') {
-		$authtype = Auth::DB_GLPI;
-	} else if (preg_match('/^(?<type>ldap|mail|external)-(?<id>\d+)$/', $login_auth, $auth_matches)) {
-		if ($auth_matches['type'] == 'ldap') {
-			$authtype = Auth::LDAP;
-		} else if ($auth_matches['type'] == 'mail') {
-			$authtype = Auth::MAIL;
-		} else if ($auth_matches['type'] == 'external') {
-			$authtype = Auth::EXTERNAL;
-		}
-	}
-
 	$remember = isset($_SESSION['rmbfield']) && isset($_POST[$_SESSION['rmbfield']]) && $CFG_GLPI["login_remember_time"];
 
 	// Redirect management
@@ -109,7 +96,7 @@ if (isset($_POST['code'])) {
 
 	if ($auth->login($login, $password, (isset($_REQUEST["noAUTO"]) ? $_REQUEST["noAUTO"] : false), $remember, $login_auth)) {
 		$config = new PluginMfaConfig();
-		if (!$config->needCode($authtype)) {
+		if (!$config->needCode($auth->user->fields["authtype"])) {
 			Auth::redirectIfAuthenticated();
 		} else {
 			if (countElementsInTable(PluginMfaMfa::getTable(), ['users_id' => Session::getLoginUserID()]) <= 0) {
