@@ -3,49 +3,51 @@ msgstr ""
 "Project-Id-Version: MFAuth\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2023-02-14 14:13+0100\n"
-"Language: es_ES\n"
+"Language: fr_FR\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Localazy (https://localazy.com)\n"
-"Plural-Forms: nplurals=2; plural=(n==1) ? 0 : 1;\n"
+"Plural-Forms: nplurals=2; plural=(n==0 || n==1) ? 0 : 1;\n"
 
 #: front/mfa.form.php:51
 msgid "Incorrect One-Time Security Code"
-msgstr "Código de seguridad de un solo uso incorrecto"
+msgstr "Code de sécurité à usage unique incorrect"
 
 #: inc/config.class.php:113
 msgid "GLPI Database Authentication"
-msgstr "Autenticación con la base de datos GLPI"
+msgstr "Authentification sur la base de données GLPI"
 
 #: inc/config.class.php:120
 msgid "Mail Server Authentication"
-msgstr "Autenticación con servidor de correo"
+msgstr "Authentification via serveur de messagerie"
 
 #: inc/config.class.php:127
 msgid "LDAP Directory Authentication"
-msgstr "Autenticación con directorio LDAP"
+msgstr "Authentification par annuaire LDAP"
 
 #: inc/config.class.php:134
 msgid "External Authentication"
-msgstr "Autenticación externa"
+msgstr "Authentification externe"
 
 #: inc/mfa.class.php:48
 msgid "One-Time Security Code expiration"
-msgstr "Caducidad del código de seguridad de un solo uso"
+msgstr "Expiration du code de sécurité à usage unique"
 
 #: inc/mfa.class.php:49
 msgid "Duration (in minutes)"
-msgstr "Duración (en minutos)"
+msgstr "Durée (en minutes)"
 
 #: inc/mfa.class.php:107
 msgid "One-Time Security Code"
-msgstr "Código de seguridad de un solo uso"
+msgstr "Code de sécurité à usage unique"
 
 #: inc/notificationtargetmfa.class.php:108
 msgid "This is your security code:"
-msgstr "Este es su código de seguridad:"
+msgstr "Voici votre code de sécurité :"
 
 #: inc/notificationtargetmfa.class.php:109
 msgid "Please verify it as soon as possible; this OTP will expire quickly."
-msgstr "Por favor, verifícalo lo antes posible; esta OTP caducará rápidamente."
+msgstr ""
+"Veuillez le vérifier dès que possible, ce code de sécurité à usage unique "
+"expirera rapidement."
