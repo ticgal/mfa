@@ -37,7 +37,7 @@ class PluginMfaMfa extends CommonDBTM
 
 	public static function getTypeName($nb = 0)
 	{
-		return __('MFA');
+		return 'MFA';
 	}
 
 	static function cronInfo($name)
@@ -75,7 +75,7 @@ class PluginMfaMfa extends CommonDBTM
 			$task->addVolume(1);
 			$task->log(
 				sprintf(
-					__('Deleted the One-Time Security Code of the user %s'),
+					__('Deleted the One-Time Security Code of the user %s', 'mfa'),
 					getUserName($row['users_id'])
 				)
 			);
@@ -106,7 +106,7 @@ class PluginMfaMfa extends CommonDBTM
 									<div class='col-md-5'>
 										<h2 class='card-header text-center mb-4'>" . __('One-Time Security Code', 'mfa') . "</h2>
 										<div class='col-mb-3'>
-											<label class='form-label'>" . __('Your account requires an additional authentication code.') . "</label>
+											<label class='form-label'>" . __('Your account requires an additional authentication code.', 'mfa') . "</label>
 											<input type='password' class='form-control' name='code' placeholder autocomplete='off'>
 										</div>
 										<div class='form-footer'>

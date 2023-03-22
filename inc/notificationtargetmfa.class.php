@@ -38,7 +38,7 @@ class PluginMfaNotificationTargetMfa extends NotificationTarget
 	public function getEvents()
 	{
 		return [
-			'securitycodegenerate' => __('One-Time Security Code generated'),
+			'securitycodegenerate' => __('One-Time Security Code generated', 'mfa'),
 		];
 	}
 
@@ -90,7 +90,7 @@ class PluginMfaNotificationTargetMfa extends NotificationTarget
 
 		// Common value tags
 		$tags = [
-			'mfa.code' => __('One-Time Security Code'),
+			'mfa.code' => __('One-Time Security Code', 'mfa'),
 			'mfa.action' => _n('Event', 'Events', 1),
 		];
 

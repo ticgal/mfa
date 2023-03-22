@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: MFAuth\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-02-14 14:13+0100\n"
+"POT-Creation-Date: 2023-03-22 17:22+0100\n"
 "Language: fr_FR\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -38,9 +38,22 @@ msgstr "Expiration du code de sécurité à usage unique"
 msgid "Duration (in minutes)"
 msgstr "Durée (en minutes)"
 
-#: inc/mfa.class.php:107
+#: inc/mfa.class.php:78
+#, php-format
+msgid "Deleted the One-Time Security Code of the user %s"
+msgstr "Deleted the One-Time Security Code of the user %s"
+
+#: inc/mfa.class.php:107 inc/notificationtargetmfa.class.php:93
 msgid "One-Time Security Code"
 msgstr "Code de sécurité à usage unique"
+
+#: inc/mfa.class.php:109
+msgid "Your account requires an additional authentication code."
+msgstr "Your account requires an additional authentication code."
+
+#: inc/notificationtargetmfa.class.php:41
+msgid "One-Time Security Code generated"
+msgstr "One-Time Security Code generated"
 
 #: inc/notificationtargetmfa.class.php:108
 msgid "This is your security code:"

@@ -61,7 +61,7 @@ class PluginMfaConfig extends CommonDBTM
 
 	static function getTypeName($nb = 0)
 	{
-		return __("MFA");
+		return "MFA";
 	}
 
 	static function getInstance()
