@@ -4,6 +4,7 @@
 ## Features
 - Twig template for MFA Login #15193
 - Update localazy strings (Indonesian)
+- Update localazy strings (Netherlands)
 ## Bugfixes
 - Fix save config #13665
 - Fix check default authtype #13675
