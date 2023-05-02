@@ -1,15 +1,10 @@
 # MFA
 
-## 1.0.3 - 2023-05-02
-## Features
-- Twig template for MFA Login #15193
-## Bugfixes
-- Fix security problem #15193
-
-## 1.0.2 - 2023-02-14
+## 1.0.2 - 2023-05-02
 ## Bugfixes
 - Fix save config #13665
 - Fix check default authtype #13675
+- Fix security problem #15193
 
 ## 1.0.1 - 2022-12-26
 ## Features
