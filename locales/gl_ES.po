@@ -1,63 +1,61 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: MFAuth\n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-05-02 14:19+0200\n"
-"Language: gl_ES\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Localazy (https://localazy.com)\n"
+"Project-Id-Version: MFAuth\n"
+"Language: gl_ES\n"
 "Plural-Forms: nplurals=2; plural=(n==1) ? 0 : 1;\n"
-
-#: front/mfa.form.php:49
-msgid "Incorrect One-Time Security Code"
-msgstr "Código de seguridade único incorrecto"
-
-#: inc/config.class.php:113
-msgid "GLPI Database Authentication"
-msgstr "Autenticación coa base de datos GLPI"
-
-#: inc/config.class.php:120
-msgid "Mail Server Authentication"
-msgstr "Autenticación co servidor de correo"
-
-#: inc/config.class.php:127
-msgid "LDAP Directory Authentication"
-msgstr "Autenticación co directorio LDAP"
-
-#: inc/config.class.php:134
-msgid "External Authentication"
-msgstr "Autenticación externa"
-
-#: inc/notificationtargetmfa.class.php:41
-msgid "One-Time Security Code generated"
-msgstr "Código de seguridade único xerado"
-
-#: inc/notificationtargetmfa.class.php:93 templates/mfa.html.twig:44
-msgid "One-Time Security Code"
-msgstr "Código de seguridade único"
-
-#: inc/notificationtargetmfa.class.php:108
-msgid "This is your security code:"
-msgstr "Este é o teu código de seguranza:"
-
-#: inc/notificationtargetmfa.class.php:109
-msgid "Please verify it as soon as possible; this OTP will expire quickly."
-msgstr "Por favor, verifícao canto antes; esta OTP caducará rapidamente."
-
-#: inc/mfa.class.php:49
-msgid "One-Time Security Code expiration"
-msgstr "Caducidade do código de seguridade único"
-
-#: inc/mfa.class.php:50
-msgid "Duration (in minutes)"
-msgstr "Duración (en minutos)"
 
 #: inc/mfa.class.php:79
 #, php-format
 msgid "Deleted the One-Time Security Code of the user %s"
 msgstr "Eliminouse o código de seguranza único do usuario %s"
+
+#: inc/mfa.class.php:50
+msgid "Duration (in minutes)"
+msgstr "Duración (en minutos)"
+
+#: inc/config.class.php:134
+msgid "External Authentication"
+msgstr "Autenticación externa"
+
+#: inc/config.class.php:113
+msgid "GLPI Database Authentication"
+msgstr "Autenticación coa base de datos GLPI"
+
+#: front/mfa.form.php:49
+msgid "Incorrect One-Time Security Code"
+msgstr "Código de seguridade único incorrecto"
+
+#: inc/config.class.php:127
+msgid "LDAP Directory Authentication"
+msgstr "Autenticación co directorio LDAP"
+
+#: inc/config.class.php:120
+msgid "Mail Server Authentication"
+msgstr "Autenticación co servidor de correo"
+
+#: inc/notificationtargetmfa.class.php:93 templates/mfa.html.twig:44
+msgid "One-Time Security Code"
+msgstr "Código de seguridade único"
+
+#: inc/mfa.class.php:49
+msgid "One-Time Security Code expiration"
+msgstr "Caducidade do código de seguridade único"
+
+#: inc/notificationtargetmfa.class.php:41
+msgid "One-Time Security Code generated"
+msgstr "Código de seguridade único xerado"
+
+#: inc/notificationtargetmfa.class.php:109
+msgid "Please verify it as soon as possible; this OTP will expire quickly."
+msgstr "Por favor, verifícao canto antes; esta OTP caducará rapidamente."
+
+#: inc/notificationtargetmfa.class.php:108
+msgid "This is your security code:"
+msgstr "Este é o teu código de seguranza:"
 
 #: templates/mfa.html.twig:47
 msgid "Your account requires an additional authentication code."

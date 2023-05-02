@@ -5,58 +5,58 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Localazy (https://localazy.com)\n"
 "Project-Id-Version: MFAuth\n"
-"Language: nl_NL\n"
-"Plural-Forms: nplurals=2; plural=(n==1) ? 0 : 1;\n"
+"Language: id_ID\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 
 #: inc/mfa.class.php:79
 #, php-format
 msgid "Deleted the One-Time Security Code of the user %s"
-msgstr "De eenmalige beveiligingscode van de gebruiker %s is verwijderd"
+msgstr "Menghapus Kode Keamanan Sekali Pakai pengguna %s"
 
 #: inc/mfa.class.php:50
 msgid "Duration (in minutes)"
-msgstr "Duur (in minuten)"
+msgstr "Durasi (dalam menit)"
 
 #: inc/config.class.php:134
 msgid "External Authentication"
-msgstr "Externe authenticatie"
+msgstr "Otentikasi Eksternal"
 
 #: inc/config.class.php:113
 msgid "GLPI Database Authentication"
-msgstr "GLPI Database Authenticatie"
+msgstr "Otentikasi Database GLPI"
 
 #: front/mfa.form.php:49
 msgid "Incorrect One-Time Security Code"
-msgstr "Onjuiste eenmalige beveiligingscode"
+msgstr "Kode Keamanan Satu Kali Salah"
 
 #: inc/config.class.php:127
 msgid "LDAP Directory Authentication"
-msgstr "LDAP-Directory authenticatie"
+msgstr "Otentikasi Direktori LDAP"
 
 #: inc/config.class.php:120
 msgid "Mail Server Authentication"
-msgstr "Mailserver Authenticatie"
+msgstr "Otentikasi Server Email"
 
 #: inc/notificationtargetmfa.class.php:93 templates/mfa.html.twig:44
 msgid "One-Time Security Code"
-msgstr "Eenmalige beveiligingscode"
+msgstr "Kode Keamanan Sekali Pakai"
 
 #: inc/mfa.class.php:49
 msgid "One-Time Security Code expiration"
-msgstr "Vervaldatum van de eenmalige beveiligingscode"
+msgstr "Masa berlaku Kode Keamanan Sekali Pakai"
 
 #: inc/notificationtargetmfa.class.php:41
 msgid "One-Time Security Code generated"
-msgstr "Eenmalige beveiligingscode gegenereerd"
+msgstr "Kode Keamanan Sekali Pakai dihasilkan"
 
 #: inc/notificationtargetmfa.class.php:109
 msgid "Please verify it as soon as possible; this OTP will expire quickly."
-msgstr "Controleer het zo snel mogelijk. Deze eenmalige beveiligingscode zal snel verlopen."
+msgstr "Mohon verifikasi sesegera mungkin; OTP ini akan segera kadaluwarsa. "
 
 #: inc/notificationtargetmfa.class.php:108
 msgid "This is your security code:"
-msgstr "Dit is uw beveiligingscode:"
+msgstr "Ini adalah kode keamanan Anda:"
 
 #: templates/mfa.html.twig:47
 msgid "Your account requires an additional authentication code."
-msgstr "Uw account vereist een aanvullende authenticatiecode."
+msgstr "Akun Anda memerlukan kode otentikasi tambahan."
