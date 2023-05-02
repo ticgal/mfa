@@ -1,6 +1,9 @@
 # MFA
 
 ## 1.0.2 - 2023-05-02
+## Features
+- Twig template for MFA Login #15193
+- Update localazy strings (Indonesian)
 ## Bugfixes
 - Fix save config #13665
 - Fix check default authtype #13675
