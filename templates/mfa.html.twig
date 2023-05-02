@@ -1,0 +1,64 @@
+{#
+-------------------------------------------------------------------------
+MFA plugin for GLPI
+Copyright (C) 2022 by the TICgal Team.
+https://www.tic.gal
+-------------------------------------------------------------------------
+LICENSE
+This file is part of the MFA plugin.
+MFA plugin is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 3 of the License, or
+(at your option) any later version.
+MFA plugin is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+You should have received a copy of the GNU General Public License
+along with MFA. If not, see
+<http: //www.gnu.org/licenses />.
+--------------------------------------------------------------------------
+@package MFA
+@author the TICgal team
+@copyright Copyright (c) 2022 TICgal team
+@license AGPL License 3.0 or (at your option) any later version
+http://www.gnu.org/licenses/agpl-3.0-standalone.html
+@link https://www.tic.gal
+@since 2022
+----------------------------------------------------------------------
+#}
+<div class='page-anonymous'>
+    <div class='flex-fill d-flex flex-column justify-content-center py-4 mt-4'>
+        <div class='container-tight py-6' style='max-width: 60rem'>
+            <div class='text-center'>
+                <div class='col-md'>
+                    <span class='glpi-logo mb-4' title='GLPI'></span>
+                </div>
+            </div>
+            <div class='card card-md'>
+                <div class='card-body'>
+                    <form action='{{url}}' method='post' autocomplete='off' data-submit-once>
+                        <input type="hidden" name="_glpi_csrf_token" value="{{ csrf_token() }}" />
+                        <div class='row justify-content-center'>
+                            <div class='col-md-5'>
+                                <h2 class='card-header text-center mb-4'>{{ __('One-Time Security Code', 'mfa') }}</h2>
+                                <div class='col-mb-3'>
+                                    <label class='form-label'>
+                                        {{ __('Your account requires an additional authentication code.', 'mfa') }}
+                                    </label>
+                                    <input type='password' class='form-control' name='code' placeholder
+                                        autocomplete='off'>
+                                </div>
+                                <div class='form-footer'>
+                                    <button type='submit' name='submit' class='btn btn-primary w-100' tabindex='3'>
+                                        {{ __('Sign in') }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

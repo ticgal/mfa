@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: MFAuth\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-03-22 17:22+0100\n"
+"POT-Creation-Date: 2023-05-02 14:19+0200\n"
 "Language: fr_FR\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -10,7 +10,7 @@ msgstr ""
 "X-Generator: Localazy (https://localazy.com)\n"
 "Plural-Forms: nplurals=2; plural=(n==0 || n==1) ? 0 : 1;\n"
 
-#: front/mfa.form.php:51
+#: front/mfa.form.php:49
 msgid "Incorrect One-Time Security Code"
 msgstr "Code de sécurité à usage unique incorrect"
 
@@ -30,30 +30,13 @@ msgstr "Authentification par annuaire LDAP"
 msgid "External Authentication"
 msgstr "Authentification externe"
 
-#: inc/mfa.class.php:48
-msgid "One-Time Security Code expiration"
-msgstr "Expiration du code de sécurité à usage unique"
-
-#: inc/mfa.class.php:49
-msgid "Duration (in minutes)"
-msgstr "Durée (en minutes)"
-
-#: inc/mfa.class.php:78
-#, php-format
-msgid "Deleted the One-Time Security Code of the user %s"
-msgstr "Deleted the One-Time Security Code of the user %s"
-
-#: inc/mfa.class.php:107 inc/notificationtargetmfa.class.php:93
-msgid "One-Time Security Code"
-msgstr "Code de sécurité à usage unique"
-
-#: inc/mfa.class.php:109
-msgid "Your account requires an additional authentication code."
-msgstr "Your account requires an additional authentication code."
-
 #: inc/notificationtargetmfa.class.php:41
 msgid "One-Time Security Code generated"
-msgstr "One-Time Security Code generated"
+msgstr "Code de sécurité à usage unique généré"
+
+#: inc/notificationtargetmfa.class.php:93 templates/mfa.html.twig:44
+msgid "One-Time Security Code"
+msgstr "Code de sécurité à usage unique"
 
 #: inc/notificationtargetmfa.class.php:108
 msgid "This is your security code:"
@@ -64,3 +47,20 @@ msgid "Please verify it as soon as possible; this OTP will expire quickly."
 msgstr ""
 "Veuillez le vérifier dès que possible, ce code de sécurité à usage unique "
 "expirera rapidement."
+
+#: inc/mfa.class.php:49
+msgid "One-Time Security Code expiration"
+msgstr "Expiration du code de sécurité à usage unique"
+
+#: inc/mfa.class.php:50
+msgid "Duration (in minutes)"
+msgstr "Durée (en minutes)"
+
+#: inc/mfa.class.php:79
+#, php-format
+msgid "Deleted the One-Time Security Code of the user %s"
+msgstr "Suppression du code de sécurité à usage unique pour l'utilisateur %s"
+
+#: templates/mfa.html.twig:47
+msgid "Your account requires an additional authentication code."
+msgstr "Votre compte nécessite un code d'authentification supplémentaire."
