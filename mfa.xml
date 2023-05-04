@@ -1,5 +1,5 @@
 <root>
-   <name>mfa</name>
+   <name>MFA</name>
    <key>mfa</key>
    <state>stable</state> <!-- stable | unstable | beta | alpha -->
    <logo>https://raw.githubusercontent.com/ticgal/mfa/multimedia/mfa.png</logo>
