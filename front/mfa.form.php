@@ -101,6 +101,7 @@ if (isset($_POST['code'])) {
                 $mfa = new PluginMfaMfa();
                 $mfa->add(['users_id' => Session::getLoginUserID(), 'code' => PluginMfaMfa::getRandomInt(6)]);
                 NotificationEvent::raiseEvent('securitycodegenerate', $mfa, ['entities_id' => 0]);
+                sleep(1);
                 QueuedNotification::forceSendFor($mfa->getType(), $mfa->fields['id']);
             }
             Session::destroy();
