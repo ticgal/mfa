@@ -39,6 +39,7 @@ http://www.gnu.org/licenses/agpl-3.0-standalone.html
                 <div class='card-body'>
                     <form action='{{url}}' method='post' autocomplete='off' data-submit-once>
                         <input type="hidden" name="_glpi_csrf_token" value="{{ csrf_token() }}" />
+                        <input type="hidden" name="redirect" value="{{redirect}}" />
                         <div class='row justify-content-center'>
                             <div class='col-md-5'>
                                 <h2 class='card-header text-center mb-4'>{{ __('One-Time Security Code', 'mfa') }}</h2>
