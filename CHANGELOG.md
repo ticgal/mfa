@@ -1,5 +1,9 @@
 # MFA
 
+## 1.0.3 - 2024-02-16
+## Bugfixes
+- Fix redirect
+
 ## 1.0.2 - 2023-05-02
 ## Features
 - Twig template for MFA Login #15193
