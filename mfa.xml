@@ -9,12 +9,12 @@
       </short>
       <long>
 	      <en>
-Adds an extra security layer to GLPI login by asking for a One Time Security Code. 
-Currently it only supports OTP via email.
+Adds an extra security layer to GLPI login by asking for a One-Time Security Code. 
+Currently, it only supports OTP via email.
         </en>
       </long>
    </description>
-   <homepage>https://tic.gal/en/mfa/</homepage>
+   <homepage>https://tic.gal/mfa-for-glpi</homepage>
    <download>https://github.com/ticgal/mfa/releases</download>
    <issues>https://github.com/ticgal/mfa/issues</issues>
    <readme>https://github.com/ticgal/mfa/blob/master/README.md</readme>
