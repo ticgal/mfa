@@ -62,7 +62,7 @@ class PluginMfaMfa extends CommonDBTM
         $query = [
             'FROM' => self::getTable(),
             'WHERE' => [
-                new QueryExpression(
+                new \Glpi\DBAL\QueryExpression(
                     sprintf(
                         'ADDDATE(%s, INTERVAL %s MINUTE) <= NOW()',
                         $DB->quoteName('date_creation'),
@@ -130,10 +130,11 @@ class PluginMfaMfa extends CommonDBTM
 				`users_id` int {$default_key_sign} NOT NULL DEFAULT '0',
 				`code` varchar(255) DEFAULT NULL,
 				`date_creation` timestamp NULL DEFAULT NULL,
-				PRIMARY KEY (`id`)
+				PRIMARY KEY (`id`),
+                KEY `users_id` (`users_id`)
 			) ENGINE=InnoDB  DEFAULT CHARSET={$default_charset} COLLATE={$default_collation} ROW_FORMAT=DYNAMIC;";
 
-            $migration->executeMigration($query);
+            $DB->doQuery($query);
         }
     }
 }

@@ -33,6 +33,7 @@ define('PLUGIN_MFA_MIN_GLPI', '11.0');
 define('PLUGIN_MFA_MAX_GLPI', '12.0');
 
 use Glpi\Http\SessionManager;
+use Glpi\Plugin\Hooks;
 
 function plugin_version_mfa()
 {
@@ -57,17 +58,15 @@ function plugin_init_mfa()
 
     global $PLUGIN_HOOKS;
 
-    $PLUGIN_HOOKS['csrf_compliant']['mfa'] = true;
-
     $plugin = new Plugin();
     if ($plugin->isActivated('mfa')) {
         Plugin::registerClass('PluginMfaConfig', ['addtabon' => 'Config']);
-        $PLUGIN_HOOKS['config_page']['mfa'] = 'front/config.form.php';
+        $PLUGIN_HOOKS[Hooks::CONFIG_PAGE]['mfa'] = 'front/config.form.php';
 
         Plugin::registerClass('PluginMfaMfa', [
             'notificationtemplates_types' => true,
         ]);
-        $PLUGIN_HOOKS['display_login']['mfa'] = 'plugin_mfa_displayLogin';
+        $PLUGIN_HOOKS[Hooks::DISPLAY_LOGIN]['mfa'] = 'plugin_mfa_displayLogin';
 
         CronTask::Register('PluginMfaMfa', 'expiredSecurityCode', HOUR_TIMESTAMP, [
             'param' => 5,

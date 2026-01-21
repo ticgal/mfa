@@ -182,12 +182,15 @@ class PluginMfaConfig extends CommonDBTM
 				`external` tinyint NOT NULL default '0',
 				PRIMARY KEY (`id`)
 				) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation} ROW_FORMAT=DYNAMIC;";
-			$migration->executeMigration($query);
+			$DB->doQuery($query);
 
-			$migration->addPostQuery(
-				"INSERT INTO `" . $table . "` (`id`, `local`, `mail`, `ldap`, `external`)
-				VALUES (1, 1, 0, 0, 0);"
-			);
+			$config->add([
+				'id'       => 1,
+				'local'    => 1,
+				'mail'     => 0,
+				'ldap'     => 0,
+				'external' => 0
+			]);
 		}
 	}
 }
