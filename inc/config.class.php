@@ -2,7 +2,7 @@
 /*
  -------------------------------------------------------------------------
  MFA plugin for GLPI
- Copyright (C) 2022 by the TICgal Team.
+ Copyright (C) 2022-2026 by the TICGAL Team.
  https://www.tic.gal
  -------------------------------------------------------------------------
  LICENSE
@@ -19,8 +19,8 @@
  along with MFA. If not, see <http://www.gnu.org/licenses/>.
  --------------------------------------------------------------------------
  @package   MFA
- @author    the TICgal team
- @copyright Copyright (c) 2022 TICgal team
+ @author    the TICGAL team
+ @copyright Copyright (c) 2026 TICGAL team
  @license   AGPL License 3.0 or (at your option) any later version
 				http://www.gnu.org/licenses/agpl-3.0-standalone.html
  @link      https://www.tic.gal
@@ -44,17 +44,17 @@ class PluginMfaConfig extends CommonDBTM
 		}
 	}
 
-	static function canCreate()
+	static function canCreate(): bool
 	{
 		return Session::haveRight('config', UPDATE);
 	}
 
-	static function canView()
+	static function canView(): bool
 	{
 		return Session::haveRight('config', READ);
 	}
 
-	static function canUpdate()
+	static function canUpdate(): bool
 	{
 		return Session::haveRight('config', UPDATE);
 	}
@@ -77,8 +77,8 @@ class PluginMfaConfig extends CommonDBTM
 
 	static function getConfig($update = false)
 	{
-		static $config = null;
-		if (is_null(self::$config)) {
+		$config = null;
+		if (is_null($config)) {
 			$config = new self();
 		}
 		if ($update) {
@@ -90,7 +90,7 @@ class PluginMfaConfig extends CommonDBTM
 	function getTabNameForItem(CommonGLPI $item, $withtemplate = 0)
 	{
 		if ($item->getType() == 'Config') {
-			return self::getTypeName();
+			return self::createTabEntry('MFA', 0, false, 'ti ti-device-mobile-message');
 		}
 		return '';
 	}
@@ -182,11 +182,12 @@ class PluginMfaConfig extends CommonDBTM
 				`external` tinyint NOT NULL default '0',
 				PRIMARY KEY (`id`)
 				) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation} ROW_FORMAT=DYNAMIC;";
-			$DB->query($query) or die($DB->error());
+			$migration->executeMigration($query);
 
-			$config->add([
-				'id' => 1,
-			]);
+			$migration->addPostQuery(
+				"INSERT INTO `" . $table . "` (`id`, `local`, `mail`, `ldap`, `external`)
+				VALUES (1, 1, 0, 0, 0);"
+			);
 		}
 	}
 }
