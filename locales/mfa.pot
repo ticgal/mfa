@@ -1,7 +1,7 @@
 # mfa Glpi Plugin.
-# Copyright (C) 2023 TICgal
+# Copyright (C) 2023 TICGAL
 # This file is distributed under the same license as the PACKAGE package.
-# TICgal, 2023
+# TICGAL, 2023
 #
 #, fuzzy
 msgid ""
