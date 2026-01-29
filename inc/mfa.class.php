@@ -2,7 +2,7 @@
 /*
  -------------------------------------------------------------------------
  MFA plugin for GLPI
- Copyright (C) 2022 by the TICgal Team.
+ Copyright (C) 2022-2026 by the TICGAL Team.
  https://www.tic.gal
  -------------------------------------------------------------------------
  LICENSE
@@ -19,8 +19,8 @@
  along with MFA. If not, see <http://www.gnu.org/licenses/>.
  --------------------------------------------------------------------------
  @package   MFA
- @author    the TICgal team
- @copyright Copyright (c) 2022 TICgal team
+ @author    the TICGAL team
+ @copyright Copyright (c) 2026 TICGAL team
  @license   AGPL License 3.0 or (at your option) any later version
                 http://www.gnu.org/licenses/agpl-3.0-standalone.html
  @link      https://www.tic.gal
@@ -62,7 +62,7 @@ class PluginMfaMfa extends CommonDBTM
         $query = [
             'FROM' => self::getTable(),
             'WHERE' => [
-                new QueryExpression(
+                new \Glpi\DBAL\QueryExpression(
                     sprintf(
                         'ADDDATE(%s, INTERVAL %s MINUTE) <= NOW()',
                         $DB->quoteName('date_creation'),
@@ -93,7 +93,8 @@ class PluginMfaMfa extends CommonDBTM
         $template = '@mfa/mfa.html.twig';
         $template_options = [
             'url' => Toolbox::getItemTypeFormURL(__CLASS__),
-            'redirect' => $_POST["redirect"]
+            'redirect' => (!empty($_POST["redirect"])) ? $_POST["redirect"] : 'front/central.php',
+            'csrf_token' => Session::getNewCSRFToken()
         ];
         TemplateRenderer::getInstance()->display($template, $template_options);
     }
@@ -129,10 +130,11 @@ class PluginMfaMfa extends CommonDBTM
 				`users_id` int {$default_key_sign} NOT NULL DEFAULT '0',
 				`code` varchar(255) DEFAULT NULL,
 				`date_creation` timestamp NULL DEFAULT NULL,
-				PRIMARY KEY (`id`)
+				PRIMARY KEY (`id`),
+                KEY `users_id` (`users_id`)
 			) ENGINE=InnoDB  DEFAULT CHARSET={$default_charset} COLLATE={$default_collation} ROW_FORMAT=DYNAMIC;";
 
-            $DB->query($query) or die($DB->error());
+            $DB->doQuery($query);
         }
     }
 }

@@ -2,7 +2,7 @@
 /*
  -------------------------------------------------------------------------
  MFA plugin for GLPI
- Copyright (C) 2022 by the TICgal Team.
+ Copyright (C) 2022-2026 by the TICGAL Team.
  https://www.tic.gal
  -------------------------------------------------------------------------
  LICENSE
@@ -19,8 +19,8 @@
  along with MFA. If not, see <http://www.gnu.org/licenses/>.
  --------------------------------------------------------------------------
  @package   MFA
- @author    the TICgal team
- @copyright Copyright (c) 2022 TICgal team
+ @author    the TICGAL team
+ @copyright Copyright (c) 2026 TICGAL team
  @license   AGPL License 3.0 or (at your option) any later version
                 http://www.gnu.org/licenses/agpl-3.0-standalone.html
  @link      https://www.tic.gal
@@ -28,16 +28,19 @@
  ----------------------------------------------------------------------
 */
 
-define('PLUGIN_MFA_VERSION', '1.0.3');
-define('PLUGIN_MFA_MIN_GLPI', '10.0.0');
-define('PLUGIN_MFA_MAX_GLPI', '10.1.99');
+define('PLUGIN_MFA_VERSION', '2.0.0-beta.2');
+define('PLUGIN_MFA_MIN_GLPI', '11.0');
+define('PLUGIN_MFA_MAX_GLPI', '12.0');
+
+use Glpi\Http\SessionManager;
+use Glpi\Plugin\Hooks;
 
 function plugin_version_mfa()
 {
     return [
         'name' => 'MFA',
         'version' => PLUGIN_MFA_VERSION,
-        'author' => '<a href="https://tic.gal">TICgal</a>',
+        'author' => '<a href="https://tic.gal">TICGAL</a>',
         'homepage' => 'https://tic.gal',
         'license' => 'GPLv3+',
         'requirements' => [
@@ -51,21 +54,21 @@ function plugin_version_mfa()
 
 function plugin_init_mfa()
 {
-    global $PLUGIN_HOOKS;
+    SessionManager::registerPluginStatelessPath('mfa', '#^/front/mfa.form.php$#');
 
-    $PLUGIN_HOOKS['csrf_compliant']['mfa'] = true;
+    global $PLUGIN_HOOKS;
 
     $plugin = new Plugin();
     if ($plugin->isActivated('mfa')) {
         Plugin::registerClass('PluginMfaConfig', ['addtabon' => 'Config']);
-        $PLUGIN_HOOKS['config_page']['mfa'] = 'front/config.form.php';
+        $PLUGIN_HOOKS[Hooks::CONFIG_PAGE]['mfa'] = 'front/config.form.php';
 
         Plugin::registerClass('PluginMfaMfa', [
             'notificationtemplates_types' => true,
         ]);
-        $PLUGIN_HOOKS['display_login']['mfa'] = 'plugin_mfa_displayLogin';
+        $PLUGIN_HOOKS[Hooks::DISPLAY_LOGIN]['mfa'] = 'plugin_mfa_displayLogin';
 
-        Crontask::Register('PluginMfaMfa', 'expiredSecurityCode', HOUR_TIMESTAMP, [
+        CronTask::Register('PluginMfaMfa', 'expiredSecurityCode', HOUR_TIMESTAMP, [
             'param' => 5,
             'state' => 1,
             'mode'  => CronTask::MODE_EXTERNAL
