@@ -3,60 +3,59 @@ msgstr ""
 "Project-Id-Version: MFAuth\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-01-29 14:07+0100\n"
-"Language: fr_FR\n"
+"Language: pl_PL\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Localazy (https://localazy.com)\n"
-"Plural-Forms: nplurals=2; plural=(n==0 || n==1) ? 0 : 1;\n"
+"Plural-Forms: nplurals=3; plural=(n==1) ? 0 : ((n%10>=2 && n%10<=4) && "
+"((n%100<12 || n%100>14))) ? 1 : 2;\n"
 
 #: front/mfa.form.php:46
 msgid "Incorrect One-Time Security Code"
-msgstr "Code de sécurité à usage unique incorrect"
+msgstr "Nieprawidłowy jednorazowy kod bezpieczeństwa"
 
 #: inc/config.class.php:113
 msgid "GLPI Database Authentication"
-msgstr "Authentification sur la base de données GLPI"
+msgstr "Uwierzytelnianie bazy danych GLPI"
 
 #: inc/config.class.php:120
 msgid "Mail Server Authentication"
-msgstr "Authentification via serveur de messagerie"
+msgstr "Uwierzytelnienie serwera poczty"
 
 #: inc/config.class.php:127
 msgid "LDAP Directory Authentication"
-msgstr "Authentification par annuaire LDAP"
+msgstr "Uwierzytelnianie katalogu LDAP"
 
 #: inc/config.class.php:134
 msgid "External Authentication"
-msgstr "Authentification externe"
+msgstr "Uwierzytelnienie zewnętrzne"
 
 #: inc/mfa.class.php:49
 msgid "One-Time Security Code expiration"
-msgstr "Expiration du code de sécurité à usage unique"
+msgstr "Wygaśnięcie jednorazowego kodu zabezpieczającego"
 
 #: inc/mfa.class.php:50
 msgid "Duration (in minutes)"
-msgstr "Durée (en minutes)"
+msgstr "Czas trwania (w minutach)"
 
 #: inc/mfa.class.php:79
 #, php-format
 msgid "Deleted the One-Time Security Code of the user %s"
-msgstr "Suppression du code de sécurité à usage unique pour l'utilisateur %s"
+msgstr "Usunięto jednorazowy kod bezpieczeństwa użytkownika %s"
 
 #: inc/notificationtargetmfa.class.php:41
 msgid "One-Time Security Code generated"
-msgstr "Code de sécurité à usage unique généré"
+msgstr "Wygenerowany jednorazowy kod bezpieczeństwa"
 
 #: inc/notificationtargetmfa.class.php:93
 msgid "One-Time Security Code"
-msgstr "Code de sécurité à usage unique"
+msgstr "Jednorazowy kod bezpieczeństwa"
 
 #: inc/notificationtargetmfa.class.php:108
 msgid "This is your security code:"
-msgstr "Voici votre code de sécurité :"
+msgstr "To jest twój kod zabezpieczający:"
 
 #: inc/notificationtargetmfa.class.php:109
 msgid "Please verify it as soon as possible; this OTP will expire quickly."
-msgstr ""
-"Veuillez le vérifier dès que possible, ce code de sécurité à usage unique "
-"expirera rapidement."
+msgstr "Zweryfikuj to tak szybko, jak to możliwe; ten OTP szybko wygaśnie."

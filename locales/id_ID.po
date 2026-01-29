@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: MFAuth\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-05-02 14:19+0200\n"
+"POT-Creation-Date: 2026-01-29 14:07+0100\n"
 "Language: id_ID\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -10,7 +10,7 @@ msgstr ""
 "X-Generator: Localazy (https://localazy.com)\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: front/mfa.form.php:49
+#: front/mfa.form.php:46
 msgid "Incorrect One-Time Security Code"
 msgstr "Kode Keamanan Satu Kali Salah"
 
@@ -30,22 +30,6 @@ msgstr "Otentikasi Direktori LDAP"
 msgid "External Authentication"
 msgstr "Otentikasi Eksternal"
 
-#: inc/notificationtargetmfa.class.php:41
-msgid "One-Time Security Code generated"
-msgstr "Kode Keamanan Sekali Pakai dihasilkan"
-
-#: inc/notificationtargetmfa.class.php:93 templates/mfa.html.twig:44
-msgid "One-Time Security Code"
-msgstr "Kode Keamanan Sekali Pakai"
-
-#: inc/notificationtargetmfa.class.php:108
-msgid "This is your security code:"
-msgstr "Ini adalah kode keamanan Anda:"
-
-#: inc/notificationtargetmfa.class.php:109
-msgid "Please verify it as soon as possible; this OTP will expire quickly."
-msgstr "Mohon verifikasi sesegera mungkin; OTP ini akan segera kadaluwarsa. "
-
 #: inc/mfa.class.php:49
 msgid "One-Time Security Code expiration"
 msgstr "Masa berlaku Kode Keamanan Sekali Pakai"
@@ -59,6 +43,18 @@ msgstr "Durasi (dalam menit)"
 msgid "Deleted the One-Time Security Code of the user %s"
 msgstr "Menghapus Kode Keamanan Sekali Pakai pengguna %s"
 
-#: templates/mfa.html.twig:47
-msgid "Your account requires an additional authentication code."
-msgstr "Akun Anda memerlukan kode otentikasi tambahan."
+#: inc/notificationtargetmfa.class.php:41
+msgid "One-Time Security Code generated"
+msgstr "Kode Keamanan Sekali Pakai dihasilkan"
+
+#: inc/notificationtargetmfa.class.php:93
+msgid "One-Time Security Code"
+msgstr "Kode Keamanan Sekali Pakai"
+
+#: inc/notificationtargetmfa.class.php:108
+msgid "This is your security code:"
+msgstr "Ini adalah kode keamanan Anda:"
+
+#: inc/notificationtargetmfa.class.php:109
+msgid "Please verify it as soon as possible; this OTP will expire quickly."
+msgstr "Mohon verifikasi sesegera mungkin; OTP ini akan segera kadaluwarsa. "
