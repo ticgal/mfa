@@ -38,9 +38,7 @@ if (isset($_POST['code'])) {
     if ($mfa->getFromDBByCrit(['code' => $_POST['code']])) {
         // Correct code
         $mfa->delete(['id' => $mfa->getID()]);
-        
         unset($_SESSION['mfa_pending_user_id']);
-        
         Html::redirect($CFG_GLPI["root_doc"] . "/index.php");
     } else {
         // Incorrect code
@@ -51,27 +49,41 @@ if (isset($_POST['code'])) {
         exit();
     }
 } else {
-    if (!isset($_SESSION['glpicookietest']) || $_SESSION['glpicookietest'] != 'OK') {
-        $_SESSION['glpicookietest'] = 'OK';
-    }
-
     // Restore POST data
     $login    = $_POST['login_name'] ?? '';
     $password = $_POST['login_password'] ?? '';
-    $remember   = ($_POST['login_remember'] ?? 0) && $CFG_GLPI["login_remember_time"];
+    $remember = ($_POST['login_remember'] ?? 0) && $CFG_GLPI["login_remember_time"];
 
     $auth = new Auth();
 
-    Toolbox::logInFile('login', $login . ", " . $password . ", " . $remember . PHP_EOL, true);
     if ($auth->login($login, $password, false, $remember)) {
-        $config = new PluginMfaConfig();
+        // Check if native 2FA is active
+        $profile = new Profile();
+        $active_profile_id = $_SESSION['glpiactiveprofile']['id'] ?? null;
         
+        $native_2fa_active = false;
+        if ($active_profile_id && $profile->getFromDB($active_profile_id)) {
+            if (isset($profile->fields['2fa_enforced']) && $profile->fields['2fa_enforced'] == 1) {
+                $native_2fa_active = true;
+            }
+        }
+
+        // Check if user has native 2FA secret. If does, does not launch the plugin
+        if (!empty($auth->user->fields['2fa_secret'])) {
+            $native_2fa_active = true;
+        }
+
+        if ($native_2fa_active) {
+            Html::redirect($CFG_GLPI["root_doc"] . "/front/central.php");
+            exit();
+        }
+
+        // If native 2FA is not active, continue with MFA plugin
+        $config = new PluginMfaConfig();
         if (!$config->needCode($auth->user->fields["authtype"])) {
             Html::redirect($CFG_GLPI["root_doc"] . "/front/central.php");
         } else {
             $_SESSION['mfa_pending_user_id'] = Session::getLoginUserID();
-
-            // Generate code
             $mfa = new PluginMfaMfa();
 
             if (countElementsInTable($mfa->getTable(), ['users_id' => $_SESSION['mfa_pending_user_id']]) <= 0) {
@@ -79,18 +91,15 @@ if (isset($_POST['code'])) {
                     'users_id' => $_SESSION['mfa_pending_user_id'], 
                     'code'     => PluginMfaMfa::getRandomInt(6)
                 ]);
-
                 NotificationEvent::raiseEvent('securitycodegenerate', $mfa, ['entities_id' => 0]);
             }
 
-            // MFA screen
             Html::nullHeader("Login", $CFG_GLPI["root_doc"] . '/index.php');
             PluginMfaMfa::showCodeForm();
             Html::nullFooter();
             exit();
         }
     } else {
-        // Failed login
         Html::redirect($CFG_GLPI["root_doc"] . "/index.php?error=1");
     }
 }

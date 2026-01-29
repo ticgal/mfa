@@ -1,5 +1,8 @@
 # MFA
 
+## 2.0.0 - 2026-01-27
+- GLPI 11 support
+
 ## 1.0.3 - 2024-02-16
 ## Bugfixes
 - Fix redirect
