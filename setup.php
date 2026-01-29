@@ -28,7 +28,7 @@
  ----------------------------------------------------------------------
 */
 
-define('PLUGIN_MFA_VERSION', '2.0.0-beta.2');
+define('PLUGIN_MFA_VERSION', '2.0.0');
 define('PLUGIN_MFA_MIN_GLPI', '11.0');
 define('PLUGIN_MFA_MAX_GLPI', '12.0');
 
