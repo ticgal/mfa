@@ -55,6 +55,31 @@ function plugin_version_mfa()
 function plugin_init_mfa()
 {
     SessionManager::registerPluginStatelessPath('mfa', '#^/front/mfa.form.php$#');
+    
+    $is_cli = function_exists('is_CommandLine') && is_CommandLine();
+    $has_mfa = isset($_SESSION['mfa_pending_user_id']);
+
+    if ($has_mfa) {
+
+        if (!$is_cli) {
+            $uri = $_SERVER['REQUEST_URI'] ?? '';
+
+            $is_protected_page = !str_contains($uri, 'mfa.form.php') &&
+                !str_contains($uri, 'logout.php') &&
+                !str_contains($uri, 'login.php');
+
+            if ($is_protected_page) {
+                global $CFG_GLPI;
+                $mfa_url = ($CFG_GLPI["root_doc"] ?? '') . "/plugins/mfa/front/mfa.form.php";
+                if (!headers_sent()) {
+                    header("Location: " . $mfa_url);
+                } else {
+                    echo "<script>window.location.href='$mfa_url';</script>";
+                }
+                exit();
+            }
+        }
+    }
 
     global $PLUGIN_HOOKS;
 
