@@ -1,6 +1,6 @@
 # MFA
 
-## 2.1.0 - 2026-02-20
+## 2.0.1 - 2026-02-20
 ## Bugfixes
 - Prevent URL bypass during MFA pending state
 - Token deadlock error
