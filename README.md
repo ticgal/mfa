@@ -15,11 +15,11 @@ An OTP plugin for GLPI
 
 Please check the info here: https://tic.gal/en/mfa-for-glpi-does-exactly-what-you-think/
 
-#Contribute
+# Contribute
 
 Please, fell free to suggest an enhancement of fix via a PR.
 
-#Translations
+# Translations
 Translations are handled at Localazy. 
 
 Please head there and add your language: https://localazy.com/p/mfauth
