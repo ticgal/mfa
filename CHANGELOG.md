@@ -1,6 +1,13 @@
 # MFA
 
+## 2.1.0 - 2026-02-20
+## Bugfixes
+- Prevent URL bypass during MFA pending state
+- Token deadlock error
+- Multi-tab synchronization
+
 ## 2.0.0 - 2026-01-27
+## Features
 - GLPI 11 support
 
 ## 1.0.3 - 2024-02-16

@@ -28,7 +28,7 @@
  ----------------------------------------------------------------------
 */
 
-define('PLUGIN_MFA_VERSION', '2.0.0');
+define('PLUGIN_MFA_VERSION', '2.1.0');
 define('PLUGIN_MFA_MIN_GLPI', '11.0');
 define('PLUGIN_MFA_MAX_GLPI', '12.0');
 
@@ -55,6 +55,41 @@ function plugin_version_mfa()
 function plugin_init_mfa()
 {
     SessionManager::registerPluginStatelessPath('mfa', '#^/front/mfa.form.php$#');
+
+    $has_mfa = isset($_SESSION['mfa_pending_user_id']);
+
+    if ($has_mfa) {
+        $uri = $_SERVER['REQUEST_URI'] ?? '';
+        
+        $allowed_files = ['mfa.form.php', 'logout.php', 'login.php', 'pwa.php'];
+        $is_allowed = false;
+
+        foreach ($allowed_files as $file) {
+            if (str_contains($uri, $file)) {
+                $is_allowed = true;
+                break;
+            }
+        }
+
+        if (!$is_allowed) {
+            global $CFG_GLPI;
+
+            if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest') {
+                http_response_code(403);
+                exit();
+            }
+
+            $mfa_url = ($CFG_GLPI["root_doc"] ?? '') . "/plugins/mfa/front/mfa.form.php";
+
+            if (!headers_sent()) {
+                header("Location: " . $mfa_url);
+                exit();
+            } else {
+                echo "<script>window.location.href='$mfa_url';</script>";
+                exit();
+            }
+        }
+    }
 
     global $PLUGIN_HOOKS;
 

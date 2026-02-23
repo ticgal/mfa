@@ -32,6 +32,11 @@ require_once('../../../front/_check_webserver_config.php');
 
 global $CFG_GLPI;
 
+if (!isset($_SESSION['mfa_pending_user_id']) && Session::getLoginUserID()) {
+    Html::redirect($CFG_GLPI["root_doc"] . "/front/central.php");
+    exit();
+}
+
 if (isset($_POST['code'])) {
     $mfa = new PluginMfaMfa();
 
@@ -86,7 +91,14 @@ if (isset($_POST['code'])) {
             $_SESSION['mfa_pending_user_id'] = Session::getLoginUserID();
             $mfa = new PluginMfaMfa();
 
-            if (countElementsInTable($mfa->getTable(), ['users_id' => $_SESSION['mfa_pending_user_id']]) <= 0) {
+            $exists = countElementsInTable($mfa->getTable(), ['users_id' => $_SESSION['mfa_pending_user_id']]);
+
+            if (isset($_GET['resend'])) {
+                $mfa->deleteByCriteria(['users_id' => $_SESSION['mfa_pending_user_id']]);
+                $exists = 0;
+            }
+
+            if ($exists <= 0) {
                 $mfa->add([
                     'users_id' => $_SESSION['mfa_pending_user_id'], 
                     'code'     => PluginMfaMfa::getRandomInt(6)
@@ -96,6 +108,13 @@ if (isset($_POST['code'])) {
 
             Html::nullHeader("Login", $CFG_GLPI["root_doc"] . '/index.php');
             PluginMfaMfa::showCodeForm();
+
+            echo "<script>
+                if ( window.history.replaceState ) {
+                    window.history.replaceState( null, null, window.location.href );
+                }
+            </script>";
+
             Html::nullFooter();
             exit();
         }
