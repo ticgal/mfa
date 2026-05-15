@@ -7,9 +7,6 @@ An OTP plugin for GLPI
 [![TICGAL](https://img.shields.io/badge/Web-TICGAL-blue.svg)](https://tic.gal/)
 [![Localazy](https://img.shields.io/badge/Translate-Localazy-cyan)](https://localazy.com/p/mfauth#translations)
 
-## Supported versions
-- GLPI 10.0.x
-
 
 # How to use it
 
