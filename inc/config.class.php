@@ -193,4 +193,9 @@ class PluginMfaConfig extends CommonDBTM
 			]);
 		}
 	}
+
+	static function uninstall(Migration $migration): void
+	{
+		$migration->dropTable(self::getTable());
+	}
 }

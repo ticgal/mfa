@@ -137,4 +137,9 @@ class PluginMfaMfa extends CommonDBTM
             $DB->doQuery($query);
         }
     }
+
+    public static function uninstall(Migration $migration): void
+    {
+        $migration->dropTable(self::getTable());
+    }
 }
