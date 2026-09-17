@@ -46,13 +46,25 @@ if (isset($_POST['code'])) {
         Html::redirect($CFG_GLPI["root_doc"] . "/index.php");
     }
 
-    $mfa = new PluginMfaMfa();
+    // Rate-limit verification attempts per user: the code is only 6 digits, so
+    // without a lock-out it is brute-forceable by anyone who has the password.
+    if (!PluginMfaMfa::consumeAttempt($users_id)) {
+        Html::nullHeader("Login", $CFG_GLPI["root_doc"] . '/index.php');
+        echo '<div class="center b" style="color:red">' . __('Too many failed attempts. Please try again later.', 'mfa') . '</div>';
+        echo '<div class="center"><br><a class="btn btn-primary" href="' . $CFG_GLPI["root_doc"] . '/front/logout.php?noAUTO=1">' . __('Log in again') . '</a></div>';
+        Html::nullFooter();
+        exit();
+    }
 
-    // The code must belong to the user that passed step 1, otherwise any pending
-    // code of any user would validate this login.
-    if ($mfa->getFromDBByCrit(['code' => $_POST['code'], 'users_id' => $users_id])) {
+    // Force the code to a scalar string. If it arrives as an array, GLPI's criteria
+    // parser could read `['LIKE', '%']` as an operator+value pair and match any code.
+    $code = is_scalar($_POST['code']) ? (string) $_POST['code'] : '';
+
+    // Verify against the user's own pending code (bound to users_id, stored hashed,
+    // rejected if expired). Consumes the code on success.
+    if (PluginMfaMfa::verifyCode($users_id, $code)) {
         // Correct code
-        $mfa->delete(['id' => $mfa->getID()]);
+        PluginMfaMfa::clearAttempts($users_id);
 
         // Hand the login back to the core: `mfa_success` makes Auth::login() resume
         // from `mfa_pre_auth` and only now call Session::init(), which is what
@@ -122,17 +134,11 @@ if (isset($_POST['code'])) {
             Html::redirect($CFG_GLPI["root_doc"] . "/index.php");
         } else {
             $users_id = (int) Session::getLoginUserID();
-            $mfa = new PluginMfaMfa();
 
-            // Generate and send the code while the session is still available: the
-            // notification needs the user and entity context.
-            if (countElementsInTable($mfa->getTable(), ['users_id' => $users_id]) <= 0) {
-                $mfa->add([
-                    'users_id' => $users_id,
-                    'code'     => PluginMfaMfa::getRandomInt(6)
-                ]);
-                NotificationEvent::raiseEvent('securitycodegenerate', $mfa, ['entities_id' => 0]);
-            }
+            // Issue a fresh code (invalidating any previous one) and send it while the
+            // session is still available: the notification needs the user and entity
+            // context.
+            PluginMfaMfa::issueCode($users_id);
 
             // Everything the core needs to resume this login once the code is verified.
             // Same shape as the one the core builds for its own 2FA (see Auth::login()).

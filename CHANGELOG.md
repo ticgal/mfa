@@ -1,6 +1,6 @@
 # MFA
 
-## 2.0.1 - 2026-09-17
+## 2.0.1-beta.2 - 2026-09-17
 ## Security
 - Fix authentication bypass: the plugin completed the login before asking for the
   security code, so the session was already valid while the code form was displayed
@@ -15,6 +15,20 @@
 - Restore CSRF protection on the login endpoint. It was registered as a stateless
   path, which also exempts it from CSRF checks; it now uses the firewall strategy
   meant for unauthenticated plugin scripts.
+- Fix second-factor bypass through operator injection: the submitted code was passed
+  raw as a query criterion, so sending it as an array (`code[0]=LIKE&code[1]=%`) made
+  GLPI build `code LIKE '%'` and match any pending code. The value is now forced to a
+  scalar string before the lookup.
+- Rate-limit code verification: 5 failed attempts per user within 15 minutes now lock
+  further attempts, closing brute force of the 6-digit code. The counter resets on a
+  successful verification.
+- Store the security code hashed instead of in clear text, so a read of the table
+  during its validity window no longer yields a usable second factor. The plaintext
+  only travels in the notification e-mail.
+- Enforce code expiration at verification time (10 minutes) instead of relying solely
+  on the cleanup cron, and issue a fresh code on every login attempt so a code can no
+  longer be reused across attempts. Expiration is compared against the database clock
+  to stay correct regardless of the PHP/DB timezone offset.
 ## Bugfixes
 - Fix redirect after the security code: the requested URL was discarded and the user
   always landed on the dashboard. Also honoured now when native 2FA is active or when

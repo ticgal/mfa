@@ -29,6 +29,10 @@
 */
 
 use Glpi\Application\View\TemplateRenderer;
+use Symfony\Component\Cache\Adapter\Psr16Adapter;
+use Symfony\Component\RateLimiter\LimiterInterface;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
+use Symfony\Component\RateLimiter\Storage\CacheStorage;
 
 if (!defined('GLPI_ROOT')) {
     die("Sorry. You can't access directly to this file");
@@ -36,9 +40,58 @@ if (!defined('GLPI_ROOT')) {
 
 class PluginMfaMfa extends CommonDBTM
 {
+    /** Failed verifications allowed per user before lock-out. */
+    public const MAX_ATTEMPTS = 5;
+
+    /** Sliding window over which MAX_ATTEMPTS is counted. */
+    public const LOCKOUT_INTERVAL = '15 minutes';
+
+    /** Minutes a security code stays valid. Enforced at verification time. */
+    public const CODE_TTL_MINUTES = 10;
+
     public static function getTypeName($nb = 0)
     {
         return 'MFA';
+    }
+
+    /**
+     * Rate limiter for code verification, keyed per user. Mirrors the core 2FA
+     * limiter (TOTPManager::getMFARateLimiter) but under its own id so the two
+     * counters never interfere.
+     */
+    private static function getRateLimiter(int $users_id): LimiterInterface
+    {
+        global $GLPI_CACHE;
+
+        $factory = new RateLimiterFactory(
+            [
+                'id'       => 'plugin_mfa_verify',
+                'policy'   => 'sliding_window',
+                'limit'    => self::MAX_ATTEMPTS,
+                'interval' => self::LOCKOUT_INTERVAL,
+            ],
+            new CacheStorage(new Psr16Adapter($GLPI_CACHE))
+        );
+
+        return $factory->create('user_' . $users_id);
+    }
+
+    /**
+     * Consume one verification attempt for the user.
+     *
+     * @return bool true if the attempt is allowed, false if the user is locked out.
+     */
+    public static function consumeAttempt(int $users_id): bool
+    {
+        return self::getRateLimiter($users_id)->consume(1)->isAccepted();
+    }
+
+    /**
+     * Reset the failure counter after a successful verification.
+     */
+    public static function clearAttempts(int $users_id): void
+    {
+        self::getRateLimiter($users_id)->reset();
     }
 
     public static function cronInfo($name)
@@ -107,10 +160,89 @@ class PluginMfaMfa extends CommonDBTM
         for ($i = 0; $i < $length; ++$i) {
             $str .= $keyspace[random_int(0, $max)];
         }
-        if (countElementsInTable(self::getTable(), ['code' => $str]) > 0) {
-            $str = self::getRandomInt($length);
-        }
+        // No cross-table uniqueness check: codes are bound to users_id and stored
+        // hashed, so a plaintext collision across users is neither detectable here
+        // nor relevant to security.
         return $str;
+    }
+
+    /**
+     * Issue a fresh security code for the user and send it by notification.
+     *
+     * Any previous pending code is discarded first, so a code can never be reused
+     * across login attempts. The code is stored hashed (only the notification
+     * carries the plaintext), so a read of the table during its validity window
+     * does not hand over a usable second factor.
+     */
+    public static function issueCode(int $users_id): void
+    {
+        global $DB;
+
+        $mfa = new self();
+        foreach ($DB->request(['SELECT' => 'id', 'FROM' => self::getTable(), 'WHERE' => ['users_id' => $users_id]]) as $row) {
+            $mfa->delete(['id' => $row['id']]);
+        }
+
+        $plain = self::getRandomInt(6);
+        $mfa->add([
+            'users_id' => $users_id,
+            'code'     => password_hash($plain, PASSWORD_DEFAULT),
+        ]);
+
+        // Stamp date_creation with the DB clock. CommonDBTM::add() would write it from
+        // $_SESSION['glpi_currenttime'], which follows GLPI's configured timezone and
+        // can differ from the DB clock by the server's UTC offset; verifyCode compares
+        // against NOW(), so both ends must use the same clock or the TTL is meaningless.
+        $DB->update(
+            self::getTable(),
+            ['date_creation' => new \Glpi\DBAL\QueryExpression('NOW()')],
+            ['id' => $mfa->getID()]
+        );
+
+        // The e-mail must carry the plaintext, not the stored hash. The notification
+        // target reads it straight from this in-memory object (getObjectItem does not
+        // reload from DB), so overriding the field here is enough.
+        $mfa->fields['code'] = $plain;
+        NotificationEvent::raiseEvent('securitycodegenerate', $mfa, ['entities_id' => 0]);
+    }
+
+    /**
+     * Verify a submitted code for the user. Consumes (deletes) the pending code on
+     * success. Fails closed on a missing, expired or non-matching code.
+     */
+    public static function verifyCode(int $users_id, string $code): bool
+    {
+        if ($code === '') {
+            return false;
+        }
+
+        $mfa = new self();
+        if (!$mfa->getFromDBByCrit(['users_id' => $users_id])) {
+            return false;
+        }
+
+        // Reject a code older than its TTL, regardless of whether the cleanup cron
+        // has run yet. Done in SQL against the DB clock so it stays correct whatever
+        // the timezone offset between PHP and the database (see issueCode). TTL is an
+        // int class constant, so the expression carries no user input.
+        $still_valid = countElementsInTable(self::getTable(), [
+            'id' => $mfa->getID(),
+            new \Glpi\DBAL\QueryExpression(
+                'date_creation >= (NOW() - INTERVAL ' . self::CODE_TTL_MINUTES . ' MINUTE)'
+            ),
+        ]) > 0;
+
+        if (!$still_valid) {
+            $mfa->delete(['id' => $mfa->getID()]);
+            return false;
+        }
+
+        if (!password_verify($code, (string) $mfa->fields['code'])) {
+            return false;
+        }
+
+        $mfa->delete(['id' => $mfa->getID()]);
+        return true;
     }
 
     public static function install(Migration $migration)
