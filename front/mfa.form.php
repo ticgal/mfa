@@ -33,13 +33,37 @@ require_once('../../../front/_check_webserver_config.php');
 global $CFG_GLPI;
 
 if (isset($_POST['code'])) {
+    // ---------------------------------------------------------------------
+    // Step 2: verify the one-time code.
+    // At this point the user is NOT logged in: only the `mfa_pre_auth` data
+    // stashed by step 1 identifies him.
+    // ---------------------------------------------------------------------
+    $pre_auth = $_SESSION['mfa_pre_auth'] ?? null;
+    $users_id = (int) ($pre_auth['user_id'] ?? 0);
+
+    if ($users_id <= 0) {
+        // No pending authentication: nothing to verify.
+        Html::redirect($CFG_GLPI["root_doc"] . "/index.php");
+    }
+
     $mfa = new PluginMfaMfa();
 
-    if ($mfa->getFromDBByCrit(['code' => $_POST['code']])) {
+    // The code must belong to the user that passed step 1, otherwise any pending
+    // code of any user would validate this login.
+    if ($mfa->getFromDBByCrit(['code' => $_POST['code'], 'users_id' => $users_id])) {
         // Correct code
         $mfa->delete(['id' => $mfa->getID()]);
-        unset($_SESSION['mfa_pending_user_id']);
-        Html::redirect($CFG_GLPI["root_doc"] . "/index.php");
+
+        // Hand the login back to the core: `mfa_success` makes Auth::login() resume
+        // from `mfa_pre_auth` and only now call Session::init(), which is what
+        // actually creates the authenticated session.
+        $_SESSION['mfa_success'] = true;
+
+        $url = $CFG_GLPI["root_doc"] . "/front/login.php";
+        if (!empty($pre_auth['redirect'])) {
+            $url .= '?redirect=' . rawurlencode($pre_auth['redirect']);
+        }
+        Html::redirect($url);
     } else {
         // Incorrect code
         Html::nullHeader("Login", $CFG_GLPI["root_doc"] . '/index.php');
@@ -49,18 +73,31 @@ if (isset($_POST['code'])) {
         exit();
     }
 } else {
+    // ---------------------------------------------------------------------
+    // Step 1: validate the credentials.
+    // ---------------------------------------------------------------------
     // Restore POST data
     $login    = $_POST['login_name'] ?? '';
     $password = $_POST['login_password'] ?? '';
     $remember = ($_POST['login_remember'] ?? 0) && $CFG_GLPI["login_remember_time"];
+    $noauto   = (bool) ($_REQUEST['noAUTO'] ?? false);
 
     $auth = new Auth();
 
-    if ($auth->login($login, $password, false, $remember)) {
+    // Auth::login() performs every side effect of a normal login (deny rules, LDAP
+    // restore, last_login, user auto-add, event log). If the user has native 2FA
+    // pending, it never returns: the core redirects to /MFA/Prompt on its own.
+    //
+    // `remember me` is deliberately forced to false here: Auth::login() issues the
+    // auto-login cookie right after Session::init(), and that cookie would survive
+    // the session teardown below, letting anyone log in from the login page without
+    // ever entering the code. The real value travels in `mfa_pre_auth` and the core
+    // issues the cookie once the code has been verified.
+    if ($auth->login($login, $password, $noauto, false)) {
         // Check if native 2FA is active
         $profile = new Profile();
         $active_profile_id = $_SESSION['glpiactiveprofile']['id'] ?? null;
-        
+
         $native_2fa_active = false;
         if ($active_profile_id && $profile->getFromDB($active_profile_id)) {
             if (isset($profile->fields['2fa_enforced']) && $profile->fields['2fa_enforced'] == 1) {
@@ -74,25 +111,54 @@ if (isset($_POST['code'])) {
         }
 
         if ($native_2fa_active) {
-            Html::redirect($CFG_GLPI["root_doc"] . "/front/central.php");
-            exit();
+            Auth::redirectIfAuthenticated();
+            Html::redirect($CFG_GLPI["root_doc"] . "/index.php");
         }
 
         // If native 2FA is not active, continue with MFA plugin
         $config = new PluginMfaConfig();
         if (!$config->needCode($auth->user->fields["authtype"])) {
-            Html::redirect($CFG_GLPI["root_doc"] . "/front/central.php");
+            Auth::redirectIfAuthenticated();
+            Html::redirect($CFG_GLPI["root_doc"] . "/index.php");
         } else {
-            $_SESSION['mfa_pending_user_id'] = Session::getLoginUserID();
+            $users_id = (int) Session::getLoginUserID();
             $mfa = new PluginMfaMfa();
 
-            if (countElementsInTable($mfa->getTable(), ['users_id' => $_SESSION['mfa_pending_user_id']]) <= 0) {
+            // Generate and send the code while the session is still available: the
+            // notification needs the user and entity context.
+            if (countElementsInTable($mfa->getTable(), ['users_id' => $users_id]) <= 0) {
                 $mfa->add([
-                    'users_id' => $_SESSION['mfa_pending_user_id'], 
+                    'users_id' => $users_id,
                     'code'     => PluginMfaMfa::getRandomInt(6)
                 ]);
                 NotificationEvent::raiseEvent('securitycodegenerate', $mfa, ['entities_id' => 0]);
             }
+
+            // Everything the core needs to resume this login once the code is verified.
+            // Same shape as the one the core builds for its own 2FA (see Auth::login()).
+            $pre_auth = [
+                'user_id'     => $users_id,
+                'username'    => $auth->user->fields['name'],
+                'remember_me' => $remember,
+                'noauto'      => $noauto,
+                'redirect'    => $_POST['redirect'] ?? null,
+            ];
+
+            // Auth::login() has already opened an authenticated session. Tear it down:
+            // until the code is verified the user must not be able to reach any page.
+            // Keep the same keys the core preserves when it restarts a session.
+            $preserved = [];
+            foreach (['glpi_plugins', 'glpicookietest', 'phpCAS', 'glpiskipMaintenance', 'glpi_remote_user'] as $key) {
+                if (isset($_SESSION[$key])) {
+                    $preserved[$key] = $_SESSION[$key];
+                }
+            }
+
+            Session::destroy();
+            Session::start();
+
+            $_SESSION = $preserved + $_SESSION;
+            $_SESSION['mfa_pre_auth'] = $pre_auth;
 
             Html::nullHeader("Login", $CFG_GLPI["root_doc"] . '/index.php');
             PluginMfaMfa::showCodeForm();

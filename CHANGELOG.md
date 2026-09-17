@@ -1,5 +1,26 @@
 # MFA
 
+## 2.0.1 - 2026-09-17
+## Security
+- Fix authentication bypass: the plugin completed the login before asking for the
+  security code, so the session was already valid while the code form was displayed
+  and any page could be reached without entering the code. Credentials are now
+  validated first and the session is only created once the code has been verified,
+  using the same pre-authentication mechanism as GLPI native 2FA.
+- Do not issue the "remember me" cookie until the security code has been verified.
+  It was sent during the first step and survived the logout, allowing a login from
+  the login page without the code.
+- Bind the security code to the user that passed the first step. Any pending code
+  of any user used to validate the login.
+- Restore CSRF protection on the login endpoint. It was registered as a stateless
+  path, which also exempts it from CSRF checks; it now uses the firewall strategy
+  meant for unauthenticated plugin scripts.
+## Bugfixes
+- Fix redirect after the security code: the requested URL was discarded and the user
+  always landed on the dashboard. Also honoured now when native 2FA is active or when
+  the profile does not require a code, which additionally fixes the landing page for
+  simplified interface users.
+
 ## 2.0.0 - 2026-01-27
 - GLPI 11 support
 

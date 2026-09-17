@@ -28,11 +28,11 @@
  ----------------------------------------------------------------------
 */
 
-define('PLUGIN_MFA_VERSION', '2.0.0');
+define('PLUGIN_MFA_VERSION', '2.0.1-beta.1');
 define('PLUGIN_MFA_MIN_GLPI', '11.0');
 define('PLUGIN_MFA_MAX_GLPI', '12.0');
 
-use Glpi\Http\SessionManager;
+use Glpi\Http\Firewall;
 use Glpi\Plugin\Hooks;
 
 function plugin_version_mfa()
@@ -54,12 +54,21 @@ function plugin_version_mfa()
 
 function plugin_init_mfa()
 {
-    SessionManager::registerPluginStatelessPath('mfa', '#^/front/mfa.form.php$#');
-
     global $PLUGIN_HOOKS;
 
     $plugin = new Plugin();
     if ($plugin->isActivated('mfa')) {
+        // The login form is posted here before the user is authenticated, so the
+        // firewall must not require a session. This is the same strategy the core
+        // applies to /front/login.php. It must NOT be declared stateless: the flow
+        // needs the session to carry `mfa_pre_auth` between both steps, and
+        // stateless resources are also exempt from CSRF checks.
+        Firewall::addPluginStrategyForLegacyScripts(
+            'mfa',
+            '#^/front/mfa.form.php$#',
+            Firewall::STRATEGY_NO_CHECK
+        );
+
         Plugin::registerClass('PluginMfaConfig', ['addtabon' => 'Config']);
         $PLUGIN_HOOKS[Hooks::CONFIG_PAGE]['mfa'] = 'front/config.form.php';
 

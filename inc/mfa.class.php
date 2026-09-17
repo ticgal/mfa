@@ -93,7 +93,7 @@ class PluginMfaMfa extends CommonDBTM
         $template = '@mfa/mfa.html.twig';
         $template_options = [
             'url' => Toolbox::getItemTypeFormURL(__CLASS__),
-            'redirect' => (!empty($_POST["redirect"])) ? $_POST["redirect"] : 'front/central.php',
+            'redirect' => $_POST["redirect"] ?? '',
             'csrf_token' => Session::getNewCSRFToken()
         ];
         TemplateRenderer::getInstance()->display($template, $template_options);
