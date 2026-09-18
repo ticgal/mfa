@@ -55,7 +55,7 @@ function plugin_mfa_uninstall()
 			$classname = 'PluginMfa' . ucfirst($matches[1]);
 			include_once($filepath);
 			if (method_exists($classname, 'uninstall')) {
-				$classname::install($migration);
+				$classname::uninstall($migration);
 			}
 		}
 	}

@@ -203,4 +203,35 @@ class PluginMfaNotificationTargetMfa extends NotificationTarget
 			}
 		}
 	}
+
+	public static function uninstall(Migration $migration)
+	{
+		global $DB;
+
+		$migration->displayMessage("Uninstalling PluginMfaMfa notifications");
+
+		$itemtype = PluginMfaMfa::getType();
+
+		// Remove the notifications created for this plugin, together with their
+		// template links and targets (children keyed by notifications_id).
+		$notification = new Notification();
+		$n_n_template = new Notification_NotificationTemplate();
+		$target       = new NotificationTarget();
+
+		foreach ($DB->request(['SELECT' => 'id', 'FROM' => Notification::getTable(), 'WHERE' => ['itemtype' => $itemtype]]) as $row) {
+			$n_n_template->deleteByCriteria(['notifications_id' => $row['id']], true);
+			$target->deleteByCriteria(['notifications_id' => $row['id']], true);
+			$notification->delete(['id' => $row['id']], true);
+		}
+
+		// Remove the notification templates created for this plugin and their
+		// translations (children keyed by notificationtemplates_id).
+		$template    = new NotificationTemplate();
+		$translation = new NotificationTemplateTranslation();
+
+		foreach ($DB->request(['SELECT' => 'id', 'FROM' => NotificationTemplate::getTable(), 'WHERE' => ['itemtype' => $itemtype]]) as $row) {
+			$translation->deleteByCriteria(['notificationtemplates_id' => $row['id']], true);
+			$template->delete(['id' => $row['id']], true);
+		}
+	}
 }
