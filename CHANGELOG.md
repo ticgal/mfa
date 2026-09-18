@@ -34,6 +34,10 @@
   always landed on the dashboard. Also honoured now when native 2FA is active or when
   the profile does not require a code, which additionally fixes the landing page for
   simplified interface users.
+- Clean up on uninstall: the uninstall routine mistakenly re-ran install and left
+  everything behind. It now drops the plugin tables (`glpi_plugin_mfa_mfas`,
+  `glpi_plugin_mfa_configs`) and removes the notification, template, translation and
+  target it created.
 
 ## 2.0.0 - 2026-01-27
 - GLPI 11 support
