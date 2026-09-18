@@ -1,6 +1,6 @@
 # MFA
 
-## 2.0.1-beta.2 - 2026-09-17
+## 2.0.1 - 2026-09-18
 ## Security
 - Fix authentication bypass: the plugin completed the login before asking for the
   security code, so the session was already valid while the code form was displayed
