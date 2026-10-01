@@ -1,5 +1,9 @@
 # MFA
 
+## 3.0.0 - 2026-10-01
+## Feature
+- GLPI 12 support
+
 ## 2.0.2 - 2026-09-30
 ## Security
 - Fix authentication bypass: the plugin completed the login before asking for the

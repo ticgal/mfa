@@ -1,4 +1,5 @@
 <?php
+
 /*
  -------------------------------------------------------------------------
  MFA plugin for GLPI
@@ -28,12 +29,15 @@
  ----------------------------------------------------------------------
 */
 
-define('PLUGIN_MFA_VERSION', '2.0.2');
-define('PLUGIN_MFA_MIN_GLPI', '11.0');
-define('PLUGIN_MFA_MAX_GLPI', '12.0');
-
-use Glpi\Http\Firewall;
 use Glpi\Plugin\Hooks;
+use GlpiPlugin\Mfa\Config;
+use GlpiPlugin\Mfa\Mfa;
+
+use function Safe\define;
+
+define('PLUGIN_MFA_VERSION', '3.0.0-beta1');
+define('PLUGIN_MFA_MIN_GLPI', '12.0.0');
+define('PLUGIN_MFA_MAX_GLPI', '12.0.99');
 
 function plugin_version_mfa()
 {
@@ -46,9 +50,9 @@ function plugin_version_mfa()
         'requirements' => [
             'glpi' => [
                 'min' => PLUGIN_MFA_MIN_GLPI,
-                'max' => PLUGIN_MFA_MAX_GLPI
-            ]
-        ]
+                'max' => PLUGIN_MFA_MAX_GLPI,
+            ],
+        ],
     ];
 }
 
@@ -58,29 +62,21 @@ function plugin_init_mfa()
 
     $plugin = new Plugin();
     if ($plugin->isActivated('mfa')) {
-        // The login form is posted here before the user is authenticated, so the
-        // firewall must not require a session. This is the same strategy the core
-        // applies to /front/login.php. It must NOT be declared stateless: the flow
-        // needs the session to carry `mfa_pre_auth` between both steps, and
-        // stateless resources are also exempt from CSRF checks.
-        Firewall::addPluginStrategyForLegacyScripts(
-            'mfa',
-            '#^/front/mfa.form.php$#',
-            Firewall::STRATEGY_NO_CHECK
-        );
+        // Server-side enforcement: whatever created the session, no page is served
+        // until the one-time code has been verified.
+        $PLUGIN_HOOKS[Hooks::POST_INIT]['mfa'] = 'plugin_mfa_post_init';
 
-        Plugin::registerClass('PluginMfaConfig', ['addtabon' => 'Config']);
+        Plugin::registerClass(Config::class, ['addtabon' => 'Config']);
         $PLUGIN_HOOKS[Hooks::CONFIG_PAGE]['mfa'] = 'front/config.form.php';
 
-        Plugin::registerClass('PluginMfaMfa', [
+        Plugin::registerClass(Mfa::class, [
             'notificationtemplates_types' => true,
         ]);
-        $PLUGIN_HOOKS[Hooks::DISPLAY_LOGIN]['mfa'] = 'plugin_mfa_displayLogin';
 
-        CronTask::Register('PluginMfaMfa', 'expiredSecurityCode', HOUR_TIMESTAMP, [
+        CronTask::Register(Mfa::class, 'expiredSecurityCode', HOUR_TIMESTAMP, [
             'param' => 5,
             'state' => 1,
-            'mode'  => CronTask::MODE_EXTERNAL
+            'mode'  => CronTask::MODE_EXTERNAL,
         ]);
     }
 }

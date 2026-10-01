@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<ruleset name="MFA">
+    <description>Coding standard for the MFA plugin</description>
+
+    <arg name="extensions" value="php"/>
+    <arg name="colors"/>
+    <arg value="sp"/>
+
+    <file>setup.php</file>
+    <file>hook.php</file>
+    <file>src</file>
+    <file>front</file>
+
+    <rule ref="PSR12">
+        <exclude name="Generic.Files.LineLength"/>
+        <!-- front/*.php and setup.php/hook.php are procedural entry points. -->
+        <exclude name="PSR1.Classes.ClassDeclaration.MissingNamespace"/>
+        <!-- Conflicts with PHP-CS-Fixer's PER-CS2.0, which collapses empty bodies to `{}`. -->
+        <exclude name="Squiz.Functions.MultiLineFunctionDeclaration.BraceOnSameLine"/>
+        <exclude name="Squiz.WhiteSpace.ScopeClosingBrace.ContentBefore"/>
+    </rule>
+
+    <!-- Entry points declare symbols and run code (die guard, function definitions). -->
+    <rule ref="PSR1.Files.SideEffects.FoundWithSymbols">
+        <exclude-pattern>setup.php</exclude-pattern>
+        <exclude-pattern>hook.php</exclude-pattern>
+    </rule>
+</ruleset>

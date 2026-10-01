@@ -1,4 +1,5 @@
 <?php
+
 /*
  -------------------------------------------------------------------------
  MFA plugin for GLPI
@@ -28,32 +29,33 @@
  ----------------------------------------------------------------------
 */
 
+
 require_once('../../../front/_check_webserver_config.php');
+
+use GlpiPlugin\Mfa\Guard;
+use GlpiPlugin\Mfa\Mfa;
 
 global $CFG_GLPI;
 
+// The guard (post_init) has already evaluated this session. Anyone who is not waiting
+// for a code has nothing to do here.
+if (!Guard::isPending()) {
+    Auth::redirectIfAuthenticated();
+    Html::redirect($CFG_GLPI['root_doc'] . '/index.php');
+}
+
+$users_id = (int) Session::getLoginUserID();
+$error    = null;
+
 if (isset($_POST['code'])) {
-    // ---------------------------------------------------------------------
-    // Step 2: verify the one-time code.
-    // At this point the user is NOT logged in: only the `mfa_pre_auth` data
-    // stashed by step 1 identifies him.
-    // ---------------------------------------------------------------------
-    $pre_auth = $_SESSION['mfa_pre_auth'] ?? null;
-    $users_id = (int) ($pre_auth['user_id'] ?? 0);
-
-    if ($users_id <= 0) {
-        // No pending authentication: nothing to verify.
-        Html::redirect($CFG_GLPI["root_doc"] . "/index.php");
-    }
-
-    // Rate-limit verification attempts per user: the code is only 6 digits, so
-    // without a lock-out it is brute-forceable by anyone who has the password.
-    if (!PluginMfaMfa::consumeAttempt($users_id)) {
-        Html::nullHeader("Login", $CFG_GLPI["root_doc"] . '/index.php');
+    if (!Mfa::consumeAttempt($users_id)) {
+        // The code is only 6 digits: without a lock-out it is brute-forceable by anyone
+        // who has the password.
+        Html::nullHeader('Login', $CFG_GLPI['root_doc'] . '/index.php');
         echo '<div class="center b" style="color:red">' . __('Too many failed attempts. Please try again later.', 'mfa') . '</div>';
-        echo '<div class="center"><br><a class="btn btn-primary" href="' . $CFG_GLPI["root_doc"] . '/front/logout.php?noAUTO=1">' . __('Log in again') . '</a></div>';
+        echo '<div class="center"><br><a class="btn btn-primary" href="' . $CFG_GLPI['root_doc'] . '/front/logout.php?noAUTO=1">' . __('Log in again') . '</a></div>';
         Html::nullFooter();
-        exit();
+        return;
     }
 
     // Force the code to a scalar string. If it arrives as an array, GLPI's criteria
@@ -62,116 +64,23 @@ if (isset($_POST['code'])) {
 
     // Verify against the user's own pending code (bound to users_id, stored hashed,
     // rejected if expired). Consumes the code on success.
-    if (PluginMfaMfa::verifyCode($users_id, $code)) {
-        // Correct code
-        PluginMfaMfa::clearAttempts($users_id);
+    if (Mfa::verifyCode($users_id, $code)) {
+        Mfa::clearAttempts($users_id);
+        $redirect = Guard::markVerified();
 
-        // Hand the login back to the core: `mfa_success` makes Auth::login() resume
-        // from `mfa_pre_auth` and only now call Session::init(), which is what
-        // actually creates the authenticated session.
-        $_SESSION['mfa_success'] = true;
-
-        $url = $CFG_GLPI["root_doc"] . "/front/login.php";
-        if (!empty($pre_auth['redirect'])) {
-            $url .= '?redirect=' . rawurlencode($pre_auth['redirect']);
+        if ($redirect !== null) {
+            // Validated by the core: only local destinations are followed.
+            Toolbox::manageRedirect($redirect);
         }
-        Html::redirect($url);
-    } else {
-        // Incorrect code
-        Html::nullHeader("Login", $CFG_GLPI["root_doc"] . '/index.php');
-        echo '<div class="center b" style="color:red">' . __('Incorrect One-Time Security Code', 'mfa') . '</div>';
-        echo '<div class="center"><br><a class="btn btn-primary" href="' . $CFG_GLPI["root_doc"] . '/front/logout.php?noAUTO=1">' . __('Log in again') . '</a></div>';
-        Html::nullFooter();
-        exit();
+        Auth::redirectIfAuthenticated();
+        Html::redirect($CFG_GLPI['root_doc'] . '/index.php');
     }
-} else {
-    // ---------------------------------------------------------------------
-    // Step 1: validate the credentials.
-    // ---------------------------------------------------------------------
-    // Restore POST data
-    $login    = $_POST['login_name'] ?? '';
-    $password = $_POST['login_password'] ?? '';
-    $remember = ($_POST['login_remember'] ?? 0) && $CFG_GLPI["login_remember_time"];
-    $noauto   = (bool) ($_REQUEST['noAUTO'] ?? false);
 
-    $auth = new Auth();
-
-    // Auth::login() performs every side effect of a normal login (deny rules, LDAP
-    // restore, last_login, user auto-add, event log). If the user has native 2FA
-    // pending, it never returns: the core redirects to /MFA/Prompt on its own.
-    //
-    // `remember me` is deliberately forced to false here: Auth::login() issues the
-    // auto-login cookie right after Session::init(), and that cookie would survive
-    // the session teardown below, letting anyone log in from the login page without
-    // ever entering the code. The real value travels in `mfa_pre_auth` and the core
-    // issues the cookie once the code has been verified.
-    if ($auth->login($login, $password, $noauto, false)) {
-        // Check if native 2FA is active
-        $profile = new Profile();
-        $active_profile_id = $_SESSION['glpiactiveprofile']['id'] ?? null;
-
-        $native_2fa_active = false;
-        if ($active_profile_id && $profile->getFromDB($active_profile_id)) {
-            if (isset($profile->fields['2fa_enforced']) && $profile->fields['2fa_enforced'] == 1) {
-                $native_2fa_active = true;
-            }
-        }
-
-        // Check if user has native 2FA secret. If does, does not launch the plugin
-        if (!empty($auth->user->fields['2fa_secret'])) {
-            $native_2fa_active = true;
-        }
-
-        if ($native_2fa_active) {
-            Auth::redirectIfAuthenticated();
-            Html::redirect($CFG_GLPI["root_doc"] . "/index.php");
-        }
-
-        // If native 2FA is not active, continue with MFA plugin
-        $config = new PluginMfaConfig();
-        if (!$config->needCode($auth->user->fields["authtype"])) {
-            Auth::redirectIfAuthenticated();
-            Html::redirect($CFG_GLPI["root_doc"] . "/index.php");
-        } else {
-            $users_id = (int) Session::getLoginUserID();
-
-            // Issue a fresh code (invalidating any previous one) and send it while the
-            // session is still available: the notification needs the user and entity
-            // context.
-            PluginMfaMfa::issueCode($users_id);
-
-            // Everything the core needs to resume this login once the code is verified.
-            // Same shape as the one the core builds for its own 2FA (see Auth::login()).
-            $pre_auth = [
-                'user_id'     => $users_id,
-                'username'    => $auth->user->fields['name'],
-                'remember_me' => $remember,
-                'noauto'      => $noauto,
-                'redirect'    => $_POST['redirect'] ?? null,
-            ];
-
-            // Auth::login() has already opened an authenticated session. Tear it down:
-            // until the code is verified the user must not be able to reach any page.
-            // Keep the same keys the core preserves when it restarts a session.
-            $preserved = [];
-            foreach (['glpi_plugins', 'glpicookietest', 'phpCAS', 'glpiskipMaintenance', 'glpi_remote_user'] as $key) {
-                if (isset($_SESSION[$key])) {
-                    $preserved[$key] = $_SESSION[$key];
-                }
-            }
-
-            Session::destroy();
-            Session::start();
-
-            $_SESSION = $preserved + $_SESSION;
-            $_SESSION['mfa_pre_auth'] = $pre_auth;
-
-            Html::nullHeader("Login", $CFG_GLPI["root_doc"] . '/index.php');
-            PluginMfaMfa::showCodeForm();
-            Html::nullFooter();
-            exit();
-        }
-    } else {
-        Html::redirect($CFG_GLPI["root_doc"] . "/index.php?error=1");
-    }
+    $error = __('Incorrect One-Time Security Code', 'mfa');
 }
+
+Guard::retryDelivery();
+
+Html::nullHeader('Login', $CFG_GLPI['root_doc'] . '/index.php');
+Mfa::showCodeForm($error, Guard::getNotice());
+Html::nullFooter();

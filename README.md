@@ -12,6 +12,18 @@ An OTP plugin for GLPI
 
 Please check the info here: https://tic.gal/en/mfa-for-glpi-does-exactly-what-you-think/
 
+# Requirements and recovery
+
+The security code is sent by e-mail, so GLPI e-mail notifications must be enabled, the notification
+"One-Time Security Code generated" must be active, and every user covered by MFA needs an e-mail address.
+The configuration tab warns when notifications are disabled. If nobody can sign in because codes cannot be
+delivered, deactivate the plugin from the console and fix the setup:
+
+    php bin/console plugin:deactivate mfa
+
+Notes: the code is always asked for on a new session, including when it is restored from a "remember me"
+cookie. REST API tokens and other flows that do not use the web session are not covered by the plugin.
+
 # Contribute
 
 Please, fell free to suggest an enhancement of fix via a PR.

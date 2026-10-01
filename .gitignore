@@ -1,2 +1,4 @@
 /nbproject/*
 /docs/plans/
+/.php-cs-fixer.cache
+/vendor/

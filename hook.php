@@ -1,4 +1,5 @@
 <?php
+
 /*
  -------------------------------------------------------------------------
  MFA plugin for GLPI
@@ -22,65 +23,93 @@
  @author    the TICGAL team
  @copyright Copyright (c) 2026 TICGAL team
  @license   AGPL License 3.0 or (at your option) any later version
-				http://www.gnu.org/licenses/agpl-3.0-standalone.html
+                http://www.gnu.org/licenses/agpl-3.0-standalone.html
  @link      https://www.tic.gal
  @since     2022
  ----------------------------------------------------------------------
 */
 
+use GlpiPlugin\Mfa\Config;
+use GlpiPlugin\Mfa\Guard;
+use GlpiPlugin\Mfa\Mfa;
+use GlpiPlugin\Mfa\NotificationTargetMfa;
+
+/**
+ * Classes taking part in install/uninstall, in install order.
+ *
+ * @return class-string[]
+ */
+function plugin_mfa_get_classes(): array
+{
+    return [
+        Config::class,
+        Mfa::class,
+        NotificationTargetMfa::class,
+    ];
+}
+
+/**
+ * Itemtypes were renamed when the classes moved to `src/` (v3.0.0). Rewrite the
+ * ones stored in the database so existing notifications, templates and cron
+ * tasks keep pointing to the plugin classes.
+ */
+function plugin_mfa_migrate_itemtypes(): void
+{
+    global $DB;
+
+    $old = 'PluginMfaMfa';
+    $new = Mfa::class;
+
+    // Cron tasks are unique per (itemtype, name): when the new class has already
+    // registered its task, drop the old row instead of renaming it.
+    if ($DB->tableExists('glpi_crontasks')) {
+        $cron = new CronTask();
+        foreach ($DB->request(['FROM' => 'glpi_crontasks', 'WHERE' => ['itemtype' => $old]]) as $row) {
+            if (countElementsInTable('glpi_crontasks', ['itemtype' => $new, 'name' => $row['name']]) > 0) {
+                $cron->delete(['id' => $row['id']], true);
+            }
+        }
+    }
+
+    foreach (['glpi_notificationtemplates', 'glpi_notifications', 'glpi_crontasks'] as $table) {
+        if (!$DB->tableExists($table)) {
+            continue;
+        }
+        $DB->update($table, ['itemtype' => $new], ['itemtype' => $old]);
+    }
+}
+
 function plugin_mfa_install()
 {
-	$migration = new Migration(PLUGIN_MFA_VERSION);
+    $migration = new Migration(PLUGIN_MFA_VERSION);
 
-	foreach (glob(dirname(__FILE__) . '/inc/*') as $filepath) {
-		if (preg_match("/inc.(.+)\.class.php/", $filepath, $matches)) {
-			$classname = 'PluginMfa' . ucfirst($matches[1]);
-			include_once($filepath);
-			if (method_exists($classname, 'install')) {
-				$classname::install($migration);
-			}
-		}
-	}
-	$migration->executeMigration();
+    plugin_mfa_migrate_itemtypes();
 
-	return true;
+    foreach (plugin_mfa_get_classes() as $classname) {
+        if (method_exists($classname, 'install')) {
+            $classname::install($migration);
+        }
+    }
+    $migration->executeMigration();
+
+    return true;
 }
 
 function plugin_mfa_uninstall()
 {
-	$migration = new Migration(PLUGIN_MFA_VERSION);
+    $migration = new Migration(PLUGIN_MFA_VERSION);
 
-	foreach (glob(dirname(__FILE__) . '/inc/*') as $filepath) {
-		if (preg_match("/inc.(.+)\.class.php/", $filepath, $matches)) {
-			$classname = 'PluginMfa' . ucfirst($matches[1]);
-			include_once($filepath);
-			if (method_exists($classname, 'uninstall')) {
-				$classname::uninstall($migration);
-			}
-		}
-	}
-	$migration->executeMigration();
+    foreach (plugin_mfa_get_classes() as $classname) {
+        if (method_exists($classname, 'uninstall')) {
+            $classname::uninstall($migration);
+        }
+    }
+    $migration->executeMigration();
 
-	return true;
+    return true;
 }
 
-function plugin_mfa_displayLogin()
+function plugin_mfa_post_init(): void
 {
-	$url = Toolbox::getItemTypeFormURL('PluginMfaMfa');
-
-	$script = <<<JAVASCRIPT
-	document.addEventListener("DOMContentLoaded", function() {
-		var loginForm = document.querySelector("form[name=login]") || document.querySelector('div.card-body form');
-
-		if (document.body.classList.contains('logged-in') || window.location.href.includes('mfa.form.php')) {
-			return;
-		}
-
-		if (loginForm) {
-			loginForm.action = '{$url}';
-		}
-	})
-JAVASCRIPT;
-
-	echo Html::scriptBlock($script);
+    Guard::enforce();
 }

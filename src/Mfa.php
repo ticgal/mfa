@@ -1,4 +1,5 @@
 <?php
+
 /*
  -------------------------------------------------------------------------
  MFA plugin for GLPI
@@ -28,17 +29,22 @@
  ----------------------------------------------------------------------
 */
 
+namespace GlpiPlugin\Mfa;
+
+use CommonDBTM;
+use DBConnection;
 use Glpi\Application\View\TemplateRenderer;
+use Migration;
+use Notification;
+use NotificationEvent;
+use Toolbox;
+use UserEmail;
 use Symfony\Component\Cache\Adapter\Psr16Adapter;
 use Symfony\Component\RateLimiter\LimiterInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\CacheStorage;
 
-if (!defined('GLPI_ROOT')) {
-    die("Sorry. You can't access directly to this file");
-}
-
-class PluginMfaMfa extends CommonDBTM
+class Mfa extends CommonDBTM
 {
     /** Failed verifications allowed per user before lock-out. */
     public const MAX_ATTEMPTS = 5;
@@ -48,6 +54,9 @@ class PluginMfaMfa extends CommonDBTM
 
     /** Minutes a security code stays valid. Enforced at verification time. */
     public const CODE_TTL_MINUTES = 10;
+
+    /** Codes sent per user within LOCKOUT_INTERVAL; stops e-mail flooding with a valid password. */
+    public const MAX_CODES_SENT = 5;
 
     public static function getTypeName($nb = 0)
     {
@@ -59,18 +68,18 @@ class PluginMfaMfa extends CommonDBTM
      * limiter (TOTPManager::getMFARateLimiter) but under its own id so the two
      * counters never interfere.
      */
-    private static function getRateLimiter(int $users_id): LimiterInterface
+    private static function getRateLimiter(int $users_id, string $id = 'plugin_mfa_verify', int $limit = self::MAX_ATTEMPTS): LimiterInterface
     {
         global $GLPI_CACHE;
 
         $factory = new RateLimiterFactory(
             [
-                'id'       => 'plugin_mfa_verify',
+                'id'       => $id,
                 'policy'   => 'sliding_window',
-                'limit'    => self::MAX_ATTEMPTS,
+                'limit'    => $limit,
                 'interval' => self::LOCKOUT_INTERVAL,
             ],
-            new CacheStorage(new Psr16Adapter($GLPI_CACHE))
+            new CacheStorage(new Psr16Adapter($GLPI_CACHE)),
         );
 
         return $factory->create('user_' . $users_id);
@@ -87,6 +96,56 @@ class PluginMfaMfa extends CommonDBTM
     }
 
     /**
+     * Consume one code issuance for the user.
+     *
+     * @return bool true if a new code may be sent, false if too many were sent recently.
+     */
+    public static function consumeIssue(int $users_id): bool
+    {
+        return self::getRateLimiter($users_id, 'plugin_mfa_issue', self::MAX_CODES_SENT)->consume(1)->isAccepted();
+    }
+
+    /**
+     * Why no code can be delivered at all (instance level), or null when it can.
+     */
+    public static function globalDeliveryProblem(): ?string
+    {
+        global $CFG_GLPI;
+
+        if (!$CFG_GLPI['use_notifications'] || !$CFG_GLPI['notifications_mailing']) {
+            return __('E-mail notifications are disabled, so security codes cannot be delivered.', 'mfa');
+        }
+
+        $active = countElementsInTable(Notification::getTable(), [
+            'itemtype'  => self::class,
+            'event'     => 'securitycodegenerate',
+            'is_active' => 1,
+        ]);
+        if ($active === 0) {
+            return __('The notification "One-Time Security Code generated" is disabled, so security codes cannot be delivered.', 'mfa');
+        }
+
+        return null;
+    }
+
+    /**
+     * Why no code can be delivered to this user, or null when it can.
+     */
+    public static function deliveryProblem(int $users_id): ?string
+    {
+        $problem = self::globalDeliveryProblem();
+        if ($problem !== null) {
+            return $problem . ' ' . __('Contact your administrator.', 'mfa');
+        }
+
+        if (UserEmail::getDefaultForUser($users_id) === '') {
+            return __('Your account has no e-mail address to send the security code to. Contact your administrator.', 'mfa');
+        }
+
+        return null;
+    }
+
+    /**
      * Reset the failure counter after a successful verification.
      */
     public static function clearAttempts(int $users_id): void
@@ -100,7 +159,7 @@ class PluginMfaMfa extends CommonDBTM
             case 'expiredSecurityCode':
                 return [
                     'description' => __('One-Time Security Code expiration', 'mfa'),
-                    'parameter'   => __('Duration (in minutes)', 'mfa')
+                    'parameter'   => __('Duration (in minutes)', 'mfa'),
                 ];
         }
         return [];
@@ -110,7 +169,7 @@ class PluginMfaMfa extends CommonDBTM
     {
         global $CFG_GLPI, $DB;
 
-        $duration = (int)$task->fields['param'];
+        $duration = (int) $task->fields['param'];
 
         $query = [
             'FROM' => self::getTable(),
@@ -119,10 +178,10 @@ class PluginMfaMfa extends CommonDBTM
                     sprintf(
                         'ADDDATE(%s, INTERVAL %s MINUTE) <= NOW()',
                         $DB->quoteName('date_creation'),
-                        $duration
-                    )
+                        $duration,
+                    ),
                 ),
-            ]
+            ],
         ];
         $iterator = $DB->request($query);
         foreach ($iterator as $row) {
@@ -130,8 +189,8 @@ class PluginMfaMfa extends CommonDBTM
             $task->log(
                 sprintf(
                     __('Deleted the One-Time Security Code of the user %s', 'mfa'),
-                    getUserName($row['users_id'])
-                )
+                    getUserName($row['users_id']),
+                ),
             );
 
             $mfa = new self();
@@ -141,15 +200,13 @@ class PluginMfaMfa extends CommonDBTM
         return 1;
     }
 
-    public static function showCodeForm()
+    public static function showCodeForm(?string $error = null, ?string $notice = null): void
     {
-        $template = '@mfa/mfa.html.twig';
-        $template_options = [
-            'url' => Toolbox::getItemTypeFormURL(__CLASS__),
-            'redirect' => $_POST["redirect"] ?? '',
-            'csrf_token' => Session::getNewCSRFToken()
-        ];
-        TemplateRenderer::getInstance()->display($template, $template_options);
+        TemplateRenderer::getInstance()->display('@mfa/mfa.html.twig', [
+            'url'    => Toolbox::getItemTypeFormURL(__CLASS__),
+            'error'  => $error,
+            'notice' => $notice,
+        ]);
     }
 
     public static function getRandomInt($length)
@@ -196,7 +253,7 @@ class PluginMfaMfa extends CommonDBTM
         $DB->update(
             self::getTable(),
             ['date_creation' => new \Glpi\DBAL\QueryExpression('NOW()')],
-            ['id' => $mfa->getID()]
+            ['id' => $mfa->getID()],
         );
 
         // The e-mail must carry the plaintext, not the stored hash. The notification
@@ -228,7 +285,7 @@ class PluginMfaMfa extends CommonDBTM
         $still_valid = countElementsInTable(self::getTable(), [
             'id' => $mfa->getID(),
             new \Glpi\DBAL\QueryExpression(
-                'date_creation >= (NOW() - INTERVAL ' . self::CODE_TTL_MINUTES . ' MINUTE)'
+                'date_creation >= (NOW() - INTERVAL ' . self::CODE_TTL_MINUTES . ' MINUTE)',
             ),
         ]) > 0;
 

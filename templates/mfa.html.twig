@@ -37,12 +37,16 @@ http://www.gnu.org/licenses/agpl-3.0-standalone.html
             </div>
             <div class='card card-md'>
                 <div class='card-body'>
-                    <form action='{{url}}' method='post' autocomplete='off' data-submit-once>
-                        <input type="hidden" name="_glpi_csrf_token" value="{{ csrf_token() }}" />
-                        <input type="hidden" name="redirect" value="{{redirect}}" />
+                    <form action='{{ url }}' method='post' autocomplete='off' data-submit-once>
                         <div class='row justify-content-center'>
                             <div class='col-md-5'>
                                 <h2 class='card-header text-center mb-4'>{{ __('One-Time Security Code', 'mfa') }}</h2>
+                                {% if notice %}
+                                    <div class='alert alert-warning' role='alert'>{{ notice }}</div>
+                                {% endif %}
+                                {% if error %}
+                                    <div class='alert alert-danger' role='alert'>{{ error }}</div>
+                                {% endif %}
                                 <div class='col-mb-3'>
                                     <label class='form-label'>
                                         {{ __('Your account requires an additional authentication code.', 'mfa') }}

@@ -1,4 +1,5 @@
 <?php
+
 /*
  -------------------------------------------------------------------------
  MFA plugin for GLPI
@@ -22,27 +23,30 @@
  @author    the TICGAL team
  @copyright Copyright (c) 2026 TICGAL team
  @license   AGPL License 3.0 or (at your option) any later version
-				http://www.gnu.org/licenses/agpl-3.0-standalone.html
+                http://www.gnu.org/licenses/agpl-3.0-standalone.html
  @link      https://www.tic.gal
  @since     2022
  ----------------------------------------------------------------------
 */
+
+use GlpiPlugin\Mfa\Config;
 
 global $CFG_GLPI;
 
 // Check if plugin is activated...
 $plugin = new Plugin();
 if (!$plugin->isInstalled('mfa') || !$plugin->isActivated('mfa')) {
-	throw new Symfony\Component\HttpKernel\Exception\NotFoundHttpException();
+    throw new Symfony\Component\HttpKernel\Exception\NotFoundHttpException();
 }
 
-Session::checkRight('config', UPDATE);
+Session::checkRight(Config::$rightname, UPDATE);
+Config::checkReAuthenticationOrRedirect();
 
-$config = new PluginMfaConfig();
+$config = new Config();
 if (isset($_POST["update"])) {
-	$config->check($_POST['id'], UPDATE);
-	$config->update($_POST);
-	Html::back();
+    $config->check($_POST['id'], UPDATE);
+    $config->update($_POST);
+    Html::back();
 }
 
-Html::redirect($CFG_GLPI["root_doc"] . "/front/config.form.php?forcetab=" . urlencode('PluginMfaConfig$1'));
+Html::redirect($CFG_GLPI["root_doc"] . "/front/config.form.php?forcetab=" . urlencode(Config::class . '$1'));
