@@ -28,11 +28,10 @@
  ----------------------------------------------------------------------
 */
 
-define('PLUGIN_MFA_VERSION', '2.0.2');
+define('PLUGIN_MFA_VERSION', '2.0.3');
 define('PLUGIN_MFA_MIN_GLPI', '11.0');
 define('PLUGIN_MFA_MAX_GLPI', '12.0');
 
-use Glpi\Http\Firewall;
 use Glpi\Plugin\Hooks;
 
 function plugin_version_mfa()
@@ -58,27 +57,22 @@ function plugin_init_mfa()
 
     $plugin = new Plugin();
     if ($plugin->isActivated('mfa')) {
-        // The login form is posted here before the user is authenticated, so the
-        // firewall must not require a session. This is the same strategy the core
-        // applies to /front/login.php. It must NOT be declared stateless: the flow
-        // needs the session to carry `mfa_pre_auth` between both steps, and
-        // stateless resources are also exempt from CSRF checks.
-        Firewall::addPluginStrategyForLegacyScripts(
-            'mfa',
-            '#^/front/mfa.form.php$#',
-            Firewall::STRATEGY_NO_CHECK
-        );
-
         Plugin::registerClass('PluginMfaConfig', ['addtabon' => 'Config']);
         $PLUGIN_HOOKS[Hooks::CONFIG_PAGE]['mfa'] = 'front/config.form.php';
 
         Plugin::registerClass('PluginMfaMfa', [
             'notificationtemplates_types' => true,
         ]);
-        $PLUGIN_HOOKS[Hooks::DISPLAY_LOGIN]['mfa'] = 'plugin_mfa_displayLogin';
 
+        // Enforce the second factor on the server, on every request, after the
+        // core has authenticated the user. This covers all login paths (form,
+        // SSO/CAS/x509, remember-me cookie) instead of relying on a client-side
+        // redirect of the login form, which /front/login.php bypassed.
+        $PLUGIN_HOOKS[Hooks::POST_INIT]['mfa'] = 'plugin_mfa_enforce';
+
+        // Keep the TTL of the cleanup cron aligned with the verification TTL.
         CronTask::Register('PluginMfaMfa', 'expiredSecurityCode', HOUR_TIMESTAMP, [
-            'param' => 5,
+            'param' => PluginMfaMfa::CODE_TTL_MINUTES,
             'state' => 1,
             'mode'  => CronTask::MODE_EXTERNAL
         ]);

@@ -77,14 +77,26 @@ class PluginMfaConfig extends CommonDBTM
 
 	static function getConfig($update = false)
 	{
-		$config = null;
-		if (is_null($config)) {
-			$config = new self();
-		}
+		$config = new self();
 		if ($update) {
 			$config->getFromDB(1);
 		}
 		return $config;
+	}
+
+	/**
+	 * Whether the singleton configuration row was actually loaded from the
+	 * database. Used to fail closed: a missing or unreadable configuration must
+	 * never be interpreted as "no second factor required".
+	 */
+	public function isLoaded(): bool
+	{
+		return isset(
+			$this->fields['local'],
+			$this->fields['mail'],
+			$this->fields['ldap'],
+			$this->fields['external']
+		);
 	}
 
 	function getTabNameForItem(CommonGLPI $item, $withtemplate = 0)
@@ -141,24 +153,28 @@ class PluginMfaConfig extends CommonDBTM
 		return false;
 	}
 
-	public function needCode($authtype) {
+	public function needCode($authtype): bool {
 
-		switch ($authtype) {
+		// Fail closed: if the configuration row could not be loaded (table or row
+		// missing, partial install, restore in progress), require the code instead
+		// of silently letting the login through without a second factor.
+		if (!$this->isLoaded()) {
+			return true;
+		}
+
+		switch ((int) $authtype) {
 			case Auth::DB_GLPI:
-				return $this->fields['local'];
-				break;
+				return (bool) $this->fields['local'];
 			case Auth::LDAP:
-				return $this->fields['ldap'];
-				break;
+				return (bool) $this->fields['ldap'];
 			case Auth::MAIL:
-				return $this->fields['mail'];
-				break;
+				return (bool) $this->fields['mail'];
 			case Auth::EXTERNAL:
-				return $this->fields['external'];
-				break;
+				return (bool) $this->fields['external'];
 			default:
+				// Authentication types the administrator has not configured here
+				// (e.g. API/cookie contexts) are handled by GLPI itself.
 				return false;
-				break;
 		}
 	}
 

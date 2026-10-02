@@ -64,23 +64,56 @@ function plugin_mfa_uninstall()
 	return true;
 }
 
-function plugin_mfa_displayLogin()
+/**
+ * Request-time enforcement of the second factor.
+ *
+ * Runs on POST_INIT for every request, after the session has been started (the
+ * SessionStart listener runs before plugin initialization) and before any page is
+ * rendered. If the current user is authenticated but has not yet passed this
+ * plugin's code in the current session, every request is redirected to the
+ * challenge except the challenge itself, logout and the static assets the
+ * challenge page needs. This is what makes the control effective for /front/login.php
+ * and for SSO/CAS/x509/remember-me logins, none of which post to the plugin.
+ */
+function plugin_mfa_enforce()
 {
-	$url = Toolbox::getItemTypeFormURL('PluginMfaMfa');
+	global $CFG_GLPI;
 
-	$script = <<<JAVASCRIPT
-	document.addEventListener("DOMContentLoaded", function() {
-		var loginForm = document.querySelector("form[name=login]") || document.querySelector('div.card-body form');
+	// The API and CLI do not go through this interactive challenge; the plugin
+	// does not cover them (see README).
+	if (isCommandLine() || isAPI()) {
+		return;
+	}
 
-		if (document.body.classList.contains('logged-in') || window.location.href.includes('mfa.form.php')) {
-			return;
-		}
+	$users_id = (int) Session::getLoginUserID();
+	if ($users_id <= 0) {
+		// Not authenticated yet: the login page and its assets must work normally.
+		return;
+	}
 
-		if (loginForm) {
-			loginForm.action = '{$url}';
-		}
-	})
-JAVASCRIPT;
+	if (!PluginMfaMfa::userMustVerify($users_id)) {
+		return;
+	}
 
-	echo Html::scriptBlock($script);
+	$path = (string) parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
+	if (PluginMfaMfa::isAllowedWhileUnverified($path)) {
+		return;
+	}
+
+	// Remember where the user was heading so the challenge can send them back.
+	// Only a local path from the server is stored; it is never taken from a
+	// user-supplied parameter, so it cannot become an open redirect.
+	if (empty($_SESSION['plugin_mfa_pending']['redirect'])) {
+		$_SESSION['plugin_mfa_pending']['redirect'] = $_SERVER['REQUEST_URI'] ?? '';
+	}
+
+	// This runs during the kernel boot phase (POST_INIT), before the controller is
+	// dispatched, so Html::redirect()'s RedirectException would not be caught by the
+	// kernel. Emit the redirect directly and stop the request. Headers have not been
+	// sent yet at this point; the session is flushed so the pending state persists.
+	if (!headers_sent()) {
+		session_write_close();
+		header('Location: ' . $CFG_GLPI['root_doc'] . '/plugins/mfa/front/mfa.form.php', true, 302);
+		exit();
+	}
 }

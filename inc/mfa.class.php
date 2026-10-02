@@ -29,6 +29,8 @@
 */
 
 use Glpi\Application\View\TemplateRenderer;
+use Glpi\DBAL\QueryExpression;
+use Glpi\Security\TOTPManager;
 use Symfony\Component\Cache\Adapter\Psr16Adapter;
 use Symfony\Component\RateLimiter\LimiterInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
@@ -46,6 +48,12 @@ class PluginMfaMfa extends CommonDBTM
     /** Sliding window over which MAX_ATTEMPTS is counted. */
     public const LOCKOUT_INTERVAL = '15 minutes';
 
+    /** Codes that can be issued per user before issuance is throttled. */
+    public const MAX_ISSUES = 3;
+
+    /** Sliding window over which MAX_ISSUES is counted. */
+    public const ISSUE_INTERVAL = '10 minutes';
+
     /** Minutes a security code stays valid. Enforced at verification time. */
     public const CODE_TTL_MINUTES = 10;
 
@@ -55,25 +63,53 @@ class PluginMfaMfa extends CommonDBTM
     }
 
     /**
-     * Rate limiter for code verification, keyed per user. Mirrors the core 2FA
-     * limiter (TOTPManager::getMFARateLimiter) but under its own id so the two
-     * counters never interfere.
+     * Sliding-window rate limiter keyed per user. Mirrors the core 2FA limiter
+     * (TOTPManager::getMFARateLimiter) but under its own id so the counters never
+     * interfere. A distinct $id is used for verification and for issuance.
      */
-    private static function getRateLimiter(int $users_id): LimiterInterface
+    private static function getRateLimiter(string $id, int $limit, string $interval, int $users_id): LimiterInterface
     {
         global $GLPI_CACHE;
 
         $factory = new RateLimiterFactory(
             [
-                'id'       => 'plugin_mfa_verify',
+                'id'       => $id,
                 'policy'   => 'sliding_window',
-                'limit'    => self::MAX_ATTEMPTS,
-                'interval' => self::LOCKOUT_INTERVAL,
+                'limit'    => $limit,
+                'interval' => $interval,
             ],
             new CacheStorage(new Psr16Adapter($GLPI_CACHE))
         );
 
         return $factory->create('user_' . $users_id);
+    }
+
+    /**
+     * Run $fn while holding an exclusive per-user lock.
+     *
+     * The Symfony rate limiter is built without a LockFactory (the Lock component
+     * is not shipped with GLPI), so its read-modify-write of the sliding window is
+     * not atomic: concurrent requests could each read the same counter and let more
+     * than MAX_ATTEMPTS through. An flock() on a per-user file serialises those
+     * requests on a single node. A multi-node deployment needs a shared lock
+     * (Redis/PDO) or a shared cache backend; see README.
+     */
+    private static function withUserLock(int $users_id, callable $fn)
+    {
+        $handle = @fopen(GLPI_TMP_DIR . '/plugin_mfa_user_' . $users_id . '.lock', 'c');
+        if ($handle === false) {
+            // Best effort: never block authentication because the lock file cannot
+            // be opened. The limiter still runs, just without the extra guarantee.
+            return $fn();
+        }
+
+        try {
+            flock($handle, LOCK_EX);
+            return $fn();
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
     }
 
     /**
@@ -83,7 +119,11 @@ class PluginMfaMfa extends CommonDBTM
      */
     public static function consumeAttempt(int $users_id): bool
     {
-        return self::getRateLimiter($users_id)->consume(1)->isAccepted();
+        return self::withUserLock(
+            $users_id,
+            static fn(): bool => self::getRateLimiter('plugin_mfa_verify', self::MAX_ATTEMPTS, self::LOCKOUT_INTERVAL, $users_id)
+                ->consume(1)->isAccepted()
+        );
     }
 
     /**
@@ -91,7 +131,23 @@ class PluginMfaMfa extends CommonDBTM
      */
     public static function clearAttempts(int $users_id): void
     {
-        self::getRateLimiter($users_id)->reset();
+        self::getRateLimiter('plugin_mfa_verify', self::MAX_ATTEMPTS, self::LOCKOUT_INTERVAL, $users_id)->reset();
+    }
+
+    /**
+     * Consume one issuance slot for the user. Prevents a password holder from
+     * flooding the mailbox and repeatedly invalidating the legitimate code by
+     * triggering a fresh send on every request.
+     *
+     * @return bool true if a new code may be issued, false if issuance is throttled.
+     */
+    public static function consumeIssue(int $users_id): bool
+    {
+        return self::withUserLock(
+            $users_id,
+            static fn(): bool => self::getRateLimiter('plugin_mfa_issue', self::MAX_ISSUES, self::ISSUE_INTERVAL, $users_id)
+                ->consume(1)->isAccepted()
+        );
     }
 
     public static function cronInfo($name)
@@ -146,10 +202,109 @@ class PluginMfaMfa extends CommonDBTM
         $template = '@mfa/mfa.html.twig';
         $template_options = [
             'url' => Toolbox::getItemTypeFormURL(__CLASS__),
-            'redirect' => $_POST["redirect"] ?? '',
-            'csrf_token' => Session::getNewCSRFToken()
+            'csrf_token' => Session::getNewCSRFToken(),
         ];
         TemplateRenderer::getInstance()->display($template, $template_options);
+    }
+
+    /**
+     * Whether the currently authenticated user still has to pass this plugin's
+     * second factor in the current session.
+     *
+     * Shared by the request-time enforcement hook and the challenge endpoint so
+     * both decide identically. Returns false when: the code was already verified
+     * in this session; the user is covered by GLPI native 2FA (handled by the core
+     * at login, so adding the plugin code would be a redundant double factor); or
+     * the authentication type used for this session is not configured to require a
+     * code. It fails closed on a missing configuration (see PluginMfaConfig::needCode).
+     */
+    public static function userMustVerify(int $users_id): bool
+    {
+        if ($users_id <= 0) {
+            return false;
+        }
+
+        if (self::isVerified()) {
+            return false;
+        }
+
+        // An impersonated session is driven by an operator who has already
+        // authenticated (and passed their own MFA); the impersonated user's code
+        // would be delivered to that user, not the operator, so never challenge it.
+        if (Session::isImpersonateActive()) {
+            return false;
+        }
+
+        // Native 2FA takes precedence: the core already prompted/enforced it during
+        // Auth::login(), so the plugin must not require a second, separate code.
+        $totp = new TOTPManager();
+        if (
+            $totp->is2FAEnabled($users_id)
+            || $totp->get2FAEnforcement($users_id) !== TOTPManager::ENFORCEMENT_OPTIONAL
+        ) {
+            return false;
+        }
+
+        $authtype = $_SESSION['glpiauthtype'] ?? 0;
+        return PluginMfaConfig::getConfig()->needCode($authtype);
+    }
+
+    /**
+     * Whether the current session has already cleared this plugin's second factor.
+     *
+     * Bound to the authenticated user id (not the PHP session id): the flag lives
+     * in $_SESSION, which GLPI rebuilds from scratch on every Session::init() (login,
+     * impersonation), so it cannot leak into another session; binding to the user id
+     * additionally survives a mid-session id regeneration without forcing a spurious
+     * re-challenge, and still forces verification if the session somehow serves a
+     * different user.
+     */
+    public static function isVerified(): bool
+    {
+        return isset($_SESSION['plugin_mfa_verified'])
+            && (int) $_SESSION['plugin_mfa_verified'] === (int) Session::getLoginUserID();
+    }
+
+    /**
+     * Mark the current session as having passed the second factor and drop the
+     * pending challenge state.
+     */
+    public static function markVerified(): void
+    {
+        $_SESSION['plugin_mfa_verified'] = (int) Session::getLoginUserID();
+        unset($_SESSION['plugin_mfa_pending']);
+    }
+
+    /**
+     * Paths that must stay reachable while the user is authenticated but has not
+     * yet passed the second factor, so the challenge page can render and the user
+     * can always escape by logging out.
+     *
+     * POST_INIT runs before the static-asset listener, so real static files (any
+     * non-PHP extension) are let through here; otherwise the challenge page would
+     * load without styles. The compiled CSS is served by the PHP endpoint
+     * /front/css.php, which is allow-listed explicitly.
+     */
+    public static function isAllowedWhileUnverified(string $path): bool
+    {
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        if ($extension !== '' && preg_match('/^php\d*$/', $extension) !== 1) {
+            return true;
+        }
+
+        $allowed_suffixes = [
+            '/plugins/mfa/front/mfa.form.php',
+            '/front/logout.php',
+            '/front/css.php',
+            '/front/locale.php',
+        ];
+        foreach ($allowed_suffixes as $suffix) {
+            if (str_ends_with($path, $suffix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static function getRandomInt($length)
@@ -174,7 +329,7 @@ class PluginMfaMfa extends CommonDBTM
      * carries the plaintext), so a read of the table during its validity window
      * does not hand over a usable second factor.
      */
-    public static function issueCode(int $users_id): void
+    public static function issueCode(int $users_id): int
     {
         global $DB;
 
@@ -188,6 +343,7 @@ class PluginMfaMfa extends CommonDBTM
             'users_id' => $users_id,
             'code'     => password_hash($plain, PASSWORD_DEFAULT),
         ]);
+        $mfa_id = (int) $mfa->getID();
 
         // Stamp date_creation with the DB clock. CommonDBTM::add() would write it from
         // $_SESSION['glpi_currenttime'], which follows GLPI's configured timezone and
@@ -195,8 +351,8 @@ class PluginMfaMfa extends CommonDBTM
         // against NOW(), so both ends must use the same clock or the TTL is meaningless.
         $DB->update(
             self::getTable(),
-            ['date_creation' => new \Glpi\DBAL\QueryExpression('NOW()')],
-            ['id' => $mfa->getID()]
+            ['date_creation' => new QueryExpression('NOW()')],
+            ['id' => $mfa_id]
         );
 
         // The e-mail must carry the plaintext, not the stored hash. The notification
@@ -204,20 +360,52 @@ class PluginMfaMfa extends CommonDBTM
         // reload from DB), so overriding the field here is enough.
         $mfa->fields['code'] = $plain;
         NotificationEvent::raiseEvent('securitycodegenerate', $mfa, ['entities_id' => 0]);
+
+        return $mfa_id;
     }
 
     /**
-     * Verify a submitted code for the user. Consumes (deletes) the pending code on
-     * success. Fails closed on a missing, expired or non-matching code.
+     * Whether the given challenge row is the user's own pending code and still
+     * within its validity window. Used to decide whether a fresh code must be
+     * issued or the existing one can be reused, so navigating while unverified
+     * does not re-send a code on every request.
      */
-    public static function verifyCode(int $users_id, string $code): bool
+    public static function isPendingValid(int $users_id, int $mfa_id): bool
     {
-        if ($code === '') {
+        if ($users_id <= 0 || $mfa_id <= 0) {
+            return false;
+        }
+
+        return countElementsInTable(self::getTable(), [
+            'id'       => $mfa_id,
+            'users_id' => $users_id,
+            new QueryExpression(
+                'date_creation >= (NOW() - INTERVAL ' . self::CODE_TTL_MINUTES . ' MINUTE)'
+            ),
+        ]) > 0;
+    }
+
+    /**
+     * Verify a submitted code against a specific pending challenge of the user.
+     * Consumes (deletes) the pending code on success. Fails closed on a missing,
+     * expired or non-matching code.
+     *
+     * The challenge is identified by $mfa_id, which the caller holds in the server
+     * side session (never from the request). This binds the code to the session
+     * that was issued it: a code generated for one pending session cannot be used
+     * to complete another, and a stale pending that points at an already-consumed
+     * row simply fails.
+     */
+    public static function verifyCode(int $users_id, string $code, int $mfa_id): bool
+    {
+        global $DB;
+
+        if ($code === '' || $users_id <= 0 || $mfa_id <= 0) {
             return false;
         }
 
         $mfa = new self();
-        if (!$mfa->getFromDBByCrit(['users_id' => $users_id])) {
+        if (!$mfa->getFromDBByCrit(['id' => $mfa_id, 'users_id' => $users_id])) {
             return false;
         }
 
@@ -226,14 +414,14 @@ class PluginMfaMfa extends CommonDBTM
         // the timezone offset between PHP and the database (see issueCode). TTL is an
         // int class constant, so the expression carries no user input.
         $still_valid = countElementsInTable(self::getTable(), [
-            'id' => $mfa->getID(),
-            new \Glpi\DBAL\QueryExpression(
+            'id' => $mfa_id,
+            new QueryExpression(
                 'date_creation >= (NOW() - INTERVAL ' . self::CODE_TTL_MINUTES . ' MINUTE)'
             ),
         ]) > 0;
 
         if (!$still_valid) {
-            $mfa->delete(['id' => $mfa->getID()]);
+            $DB->delete(self::getTable(), ['id' => $mfa_id]);
             return false;
         }
 
@@ -241,8 +429,13 @@ class PluginMfaMfa extends CommonDBTM
             return false;
         }
 
-        $mfa->delete(['id' => $mfa->getID()]);
-        return true;
+        // Atomic consume: the DELETE is the serialization point. If two concurrent
+        // requests both pass password_verify for the same row, only one DELETE
+        // affects a row; the other sees 0 affected rows and is rejected. This
+        // guarantees a single winner without an application lock, and a failed
+        // delete can never be reported as success.
+        $DB->delete(self::getTable(), ['id' => $mfa_id]);
+        return $DB->affectedRows() === 1;
     }
 
     public static function install(Migration $migration)
