@@ -32,7 +32,7 @@
 namespace GlpiPlugin\Mfa;
 
 use Glpi\Exception\Http\AccessDeniedHttpException;
-use Profile;
+use Glpi\Security\TOTPManager;
 use Session;
 use Symfony\Component\HttpFoundation\Response;
 use Safe\Exceptions\UrlException;
@@ -55,6 +55,12 @@ final class Guard
     private const STATE_PENDING      = 'pending';
     private const STATE_VERIFIED     = 'verified';
     private const STATE_NOT_REQUIRED = 'not_required';
+
+    /**
+     * Set while serving the "stop impersonating" request of a session that already passed the guard.
+     * Never persisted: it only lives until the session is rebuilt, inside the same request.
+     */
+    private static bool $carry_verification = false;
 
     /** Scripts reachable while the code is pending (paths relative to the GLPI root). */
     private const EXEMPT_PATHS = [
@@ -80,6 +86,11 @@ final class Guard
 
         $state = $_SESSION[self::SESSION_KEY]['state'] ?? null;
         if ($state === self::STATE_VERIFIED || $state === self::STATE_NOT_REQUIRED) {
+            // Ending an impersonation makes the core rebuild the session (Session::init()), which
+            // drops this plugin's state. The request comes from a session that already passed the
+            // guard, so its verification is handed to the rebuilt session by restoreAfterSessionInit().
+            self::$carry_verification = self::isStopImpersonationRequest();
+
             return;
         }
 
@@ -165,6 +176,29 @@ final class Guard
     }
 
     /**
+     * Hooked on `init_session`, which the core fires from Session::init() once the session has been
+     * rebuilt. Restores the verification only for the request flagged by enforce().
+     */
+    public static function restoreAfterSessionInit(): void
+    {
+        if (!self::$carry_verification) {
+            return;
+        }
+
+        self::$carry_verification = false;
+        $_SESSION[self::SESSION_KEY] = ['state' => self::STATE_VERIFIED];
+    }
+
+    private static function isStopImpersonationRequest(): bool
+    {
+        return ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+            && self::requestPath() === '/front/user.form.php'
+            && isset($_POST['impersonate'])
+            && !$_POST['impersonate']
+            && Session::isImpersonateActive();
+    }
+
+    /**
      * Is the current session waiting for a verified code?
      */
     public static function isPending(): bool
@@ -184,8 +218,12 @@ final class Guard
     }
 
     /**
-     * Does this user have to enter a code? Users covered by GLPI's native 2FA are not
-     * asked twice: the core already required its own second factor to create the session.
+     * Does this user have to enter a code?
+     *
+     * Users with GLPI's native 2FA enabled are not asked twice: the core already required a
+     * TOTP code before the session existed. Only an enabled TOTP counts. A mandatory 2FA policy
+     * (global, entity, profile or group) with no TOTP set up yet, as in a grace period where the
+     * user skipped the setup, has verified no second factor, so the plugin still asks for its code.
      */
     private static function isCodeRequired(int $users_id): bool
     {
@@ -194,13 +232,7 @@ final class Guard
             return false;
         }
 
-        if (!empty($user->fields['2fa_secret'])) {
-            return false;
-        }
-
-        $profile = new Profile();
-        $profiles_id = $_SESSION['glpiactiveprofile']['id'] ?? null;
-        if ($profiles_id && $profile->getFromDB($profiles_id) && (int) ($profile->fields['2fa_enforced'] ?? 0) === 1) {
+        if ((new TOTPManager())->is2FAEnabled($users_id)) {
             return false;
         }
 

@@ -35,7 +35,7 @@ use GlpiPlugin\Mfa\Mfa;
 
 use function Safe\define;
 
-define('PLUGIN_MFA_VERSION', '3.0.0-beta1');
+define('PLUGIN_MFA_VERSION', '3.0.0-beta2');
 define('PLUGIN_MFA_MIN_GLPI', '12.0.0');
 define('PLUGIN_MFA_MAX_GLPI', '12.0.99');
 
@@ -65,6 +65,8 @@ function plugin_init_mfa()
         // Server-side enforcement: whatever created the session, no page is served
         // until the one-time code has been verified.
         $PLUGIN_HOOKS[Hooks::POST_INIT]['mfa'] = 'plugin_mfa_post_init';
+        // Session::init() wipes the session; see Guard::restoreAfterSessionInit().
+        $PLUGIN_HOOKS[Hooks::INIT_SESSION]['mfa'] = 'plugin_mfa_init_session';
 
         Plugin::registerClass(Config::class, ['addtabon' => 'Config']);
         $PLUGIN_HOOKS[Hooks::CONFIG_PAGE]['mfa'] = 'front/config.form.php';

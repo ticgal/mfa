@@ -42,11 +42,23 @@ if (!$plugin->isInstalled('mfa') || !$plugin->isActivated('mfa')) {
 Session::checkRight(Config::$rightname, UPDATE);
 Config::checkReAuthenticationOrRedirect();
 
+// Html::back() relies on the Referer header (and drops `forcetab` from it): without a
+// Referer it sends the user to the GLPI home page. Always return to the MFA tab instead.
+$config_tab_url = $CFG_GLPI["root_doc"] . "/front/config.form.php?forcetab=" . urlencode(Config::class . '$1');
+
 $config = new Config();
 if (isset($_POST["update"])) {
     $config->check($_POST['id'], UPDATE);
     $config->update($_POST);
-    Html::back();
 }
 
-Html::redirect($CFG_GLPI["root_doc"] . "/front/config.form.php?forcetab=" . urlencode(Config::class . '$1'));
+// A script (fetch, XHR) cannot follow a navigation, so it gets the destination as JSON. This
+// runs after every access check above; the URL is always built here, never from the request.
+if (Config::isScriptedRequest()) {
+    header('Content-Type: application/json; charset=UTF-8');
+    header('Vary: Accept, Sec-Fetch-Mode, X-Requested-With');
+    echo json_encode(['redirect' => $config_tab_url], JSON_THROW_ON_ERROR);
+    return;
+}
+
+Html::redirect($config_tab_url);

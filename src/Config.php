@@ -62,6 +62,28 @@ class Config extends CommonDBTM
         return true;
     }
 
+    /**
+     * Is the caller a script (fetch, XHR, API client) rather than a browser navigation?
+     *
+     * Only used to choose the format of a response once every access check has passed.
+     * It must never be used to decide whether a check applies: the headers are sent by
+     * the client.
+     */
+    public static function isScriptedRequest(): bool
+    {
+        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') {
+            return true;
+        }
+
+        if (str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json')) {
+            return true;
+        }
+
+        $mode = $_SERVER['HTTP_SEC_FETCH_MODE'] ?? null;
+
+        return $mode !== null && !in_array($mode, ['navigate', 'nested-navigate'], true);
+    }
+
     public static function canCreate(): bool
     {
         return Session::haveRight(self::$rightname, UPDATE);

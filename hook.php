@@ -109,6 +109,11 @@ function plugin_mfa_uninstall()
     return true;
 }
 
+function plugin_mfa_init_session(): void
+{
+    Guard::restoreAfterSessionInit();
+}
+
 function plugin_mfa_post_init(): void
 {
     Guard::enforce();

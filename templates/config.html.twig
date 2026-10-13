@@ -48,7 +48,11 @@ http://www.gnu.org/licenses/agpl-3.0-standalone.html
     </div>
 
     {% if canedit %}
-        <div class="card-footer mx-n2 d-flex">
+        <div class="card-footer mx-n2 d-flex align-items-center">
+            <span class="text-muted small me-3">
+                <i class="ti ti-lock me-1" aria-hidden="true"></i>
+                {{ __('Saving these settings requires re-authentication. If your confirmation has expired, GLPI will ask for your password and then apply your changes.', 'mfa') }}
+            </span>
             <button type="submit" name="update" value="1" class="ms-auto btn btn-primary">
                 <i class="ti ti-device-floppy" aria-hidden="true"></i>
                 <span>{{ _x('button', 'Save') }}</span>
