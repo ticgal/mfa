@@ -35,7 +35,7 @@ use GlpiPlugin\Mfa\Mfa;
 
 use function Safe\define;
 
-define('PLUGIN_MFA_VERSION', '3.0.0-beta2');
+define('PLUGIN_MFA_VERSION', '3.0.0');
 define('PLUGIN_MFA_MIN_GLPI', '12.0.0');
 define('PLUGIN_MFA_MAX_GLPI', '12.0.99');
 
