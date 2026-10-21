@@ -9,6 +9,11 @@
   plugin form) opened a full session without the code. A POST_INIT hook now blocks
   any authenticated-but-unverified session from reaching any page until the code is
   verified.
+- Decide which requests an unverified session may reach on the resource the GLPI
+  router actually resolves, not on the raw URL. The router ignores a PATH_INFO suffix
+  after a script, so URLs such as `/front/computer.php/x.js` or
+  `/front/central.php/plugins/mfa/front/mfa.form.php` ran the script while matching
+  the static-file or challenge allow-list, which bypassed the second factor.
 - Stop publishing the native `mfa_pre_auth` / `mfa_success` session keys. The plugin
   used the core 2FA pre-authentication shape before the e-mailed code was verified,
   which let the native `/MFA/Setup` and `/MFA/Verify` routes register an attacker's
@@ -39,6 +44,8 @@
 - The plugin protects interactive web logins. It does not add a second factor to the
   REST API or the High-Level API (OAuth password grant); disable credential/password
   login there if those channels must be covered. See README.
+- The expired-code cleanup task is now registered at install/upgrade instead of on
+  every request.
 
 ## 2.0.2 - 2026-09-30
 ## Security

@@ -69,12 +69,5 @@ function plugin_init_mfa()
         // SSO/CAS/x509, remember-me cookie) instead of relying on a client-side
         // redirect of the login form, which /front/login.php bypassed.
         $PLUGIN_HOOKS[Hooks::POST_INIT]['mfa'] = 'plugin_mfa_enforce';
-
-        // Keep the TTL of the cleanup cron aligned with the verification TTL.
-        CronTask::Register('PluginMfaMfa', 'expiredSecurityCode', HOUR_TIMESTAMP, [
-            'param' => PluginMfaMfa::CODE_TTL_MINUTES,
-            'state' => 1,
-            'mode'  => CronTask::MODE_EXTERNAL
-        ]);
     }
 }

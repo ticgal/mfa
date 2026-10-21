@@ -32,6 +32,7 @@ use Glpi\Application\View\TemplateRenderer;
 use Glpi\DBAL\QueryExpression;
 use Glpi\Security\TOTPManager;
 use Symfony\Component\Cache\Adapter\Psr16Adapter;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\RateLimiter\LimiterInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\CacheStorage;
@@ -280,31 +281,32 @@ class PluginMfaMfa extends CommonDBTM
      * yet passed the second factor, so the challenge page can render and the user
      * can always escape by logging out.
      *
-     * POST_INIT runs before the static-asset listener, so real static files (any
-     * non-PHP extension) are let through here; otherwise the challenge page would
-     * load without styles. The compiled CSS is served by the PHP endpoint
-     * /front/css.php, which is allow-listed explicitly.
+     * POST_INIT runs before the static-asset listener, so static files are let
+     * through here; otherwise the challenge page would load without styles. The
+     * compiled CSS is served by the PHP endpoint /front/css.php, which is
+     * allow-listed explicitly.
+     *
+     * The decision is made on the resource the router resolves, never on the raw
+     * URL: the router ignores a PATH_INFO suffix after a script, so a URL such as
+     * `/front/central.php/a.css` or `/front/central.php/plugins/mfa/front/mfa.form.php`
+     * runs `/front/central.php` while looking like an allowed path.
      */
-    public static function isAllowedWhileUnverified(string $path): bool
+    public static function isAllowedWhileUnverified(Request $request): bool
     {
-        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-        if ($extension !== '' && preg_match('/^php\d*$/', $extension) !== 1) {
+        $resolver = new PluginMfaRequestpath();
+
+        if ($resolver->isStaticFile($request)) {
             return true;
         }
 
-        $allowed_suffixes = [
+        $allowed_paths = [
             '/plugins/mfa/front/mfa.form.php',
             '/front/logout.php',
             '/front/css.php',
             '/front/locale.php',
         ];
-        foreach ($allowed_suffixes as $suffix) {
-            if (str_ends_with($path, $suffix)) {
-                return true;
-            }
-        }
 
-        return false;
+        return in_array($resolver->getResolvedPath($request), $allowed_paths, true);
     }
 
     public static function getRandomInt($length)
@@ -461,6 +463,13 @@ class PluginMfaMfa extends CommonDBTM
 
             $DB->doQuery($query);
         }
+
+        // Keep the TTL of the cleanup cron aligned with the verification TTL.
+        // No-op when the task is already registered (upgrades).
+        $migration->addCrontask(self::class, 'expiredSecurityCode', HOUR_TIMESTAMP, self::CODE_TTL_MINUTES, [
+            'state' => CronTask::STATE_WAITING,
+            'mode'  => CronTask::MODE_EXTERNAL,
+        ]);
     }
 
     public static function uninstall(Migration $migration)

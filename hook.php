@@ -95,8 +95,7 @@ function plugin_mfa_enforce()
 		return;
 	}
 
-	$path = (string) parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
-	if (PluginMfaMfa::isAllowedWhileUnverified($path)) {
+	if (PluginMfaMfa::isAllowedWhileUnverified(PluginMfaRequestpath::getCurrentRequest())) {
 		return;
 	}
 
