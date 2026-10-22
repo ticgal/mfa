@@ -170,10 +170,18 @@ class PluginMfaConfig extends CommonDBTM
 			case Auth::MAIL:
 				return (bool) $this->fields['mail'];
 			case Auth::EXTERNAL:
+			case Auth::CAS:
+			case Auth::X509:
+				// CAS, x509 and remote-user SSO are all interactive logins that the
+				// core records with their own glpiauthtype; group them under the
+				// "External Authentication" switch so the plugin's claim to cover
+				// SSO/CAS/x509 actually holds.
 				return (bool) $this->fields['external'];
 			default:
-				// Authentication types the administrator has not configured here
-				// (e.g. API/cookie contexts) are handled by GLPI itself.
+				// Non-interactive contexts only (API token, remember-me cookie):
+				// the core sets glpiauthtype to the account's real authtype for an
+				// interactive login, so an interactive session never reaches here.
+				// These are handled by GLPI itself.
 				return false;
 		}
 	}
@@ -190,6 +198,10 @@ class PluginMfaConfig extends CommonDBTM
 		$config = new self();
 		if (!$DB->tableExists($table)) {
 			$migration->displayMessage("Installing $table");
+			// Raw CREATE TABLE is the accepted pattern for a plugin's initial schema in
+			// GLPI 11: Migration has no createTable() builder. Guarded by tableExists(),
+			// no user input (only DBConnection helper values). Reviewed and accepted as a
+			// non-issue (security audit 2026-10-21).
 			$query = "CREATE TABLE IF NOT EXISTS $table (
 				`id` int {$default_key_sign} NOT NULL auto_increment,
 				`local` tinyint NOT NULL default '1',

@@ -77,11 +77,23 @@ function plugin_mfa_uninstall()
  */
 function plugin_mfa_enforce()
 {
-	global $CFG_GLPI;
+	// The CLI never goes through this interactive challenge.
+	if (isCommandLine()) {
+		return;
+	}
 
-	// The API and CLI do not go through this interactive challenge; the plugin
-	// does not cover them (see README).
-	if (isCommandLine() || isAPI()) {
+	$request = PluginMfaRequestpath::getCurrentRequest();
+
+	// API paths are token-based and stateless: the enforcement hook must not open a
+	// cookie session for them (it would break token authentication), and the plugin
+	// does not cover the token/credential API channels (see README). The single
+	// exception is the OAuth authorization endpoint, which completes an interactive
+	// login from the browser's web-session cookie and is therefore a real bypass of
+	// the second factor if left alone.
+	if (isAPI()) {
+		if (PluginMfaRequestpath::isOAuthAuthorizePath($request)) {
+			plugin_mfa_enforce_oauth_authorize();
+		}
 		return;
 	}
 
@@ -95,7 +107,7 @@ function plugin_mfa_enforce()
 		return;
 	}
 
-	if (PluginMfaMfa::isAllowedWhileUnverified(PluginMfaRequestpath::getCurrentRequest())) {
+	if (PluginMfaMfa::isAllowedWhileUnverified($request)) {
 		return;
 	}
 
@@ -106,13 +118,76 @@ function plugin_mfa_enforce()
 		$_SESSION['plugin_mfa_pending']['redirect'] = $_SERVER['REQUEST_URI'] ?? '';
 	}
 
-	// This runs during the kernel boot phase (POST_INIT), before the controller is
-	// dispatched, so Html::redirect()'s RedirectException would not be caught by the
-	// kernel. Emit the redirect directly and stop the request. Headers have not been
-	// sent yet at this point; the session is flushed so the pending state persists.
-	if (!headers_sent()) {
-		session_write_close();
-		header('Location: ' . $CFG_GLPI['root_doc'] . '/plugins/mfa/front/mfa.form.php', true, 302);
+	plugin_mfa_redirect_to_challenge();
+}
+
+/**
+ * Enforce the second factor on the HL API OAuth authorization endpoint.
+ *
+ * `/api.php/.../authorize` is a stateless route, so no session was started during
+ * boot. Core's CookieAuthMiddleware opens the web session from the browser cookie
+ * and treats the logged-in user as authenticated; without this, an attacker holding
+ * the password could log in, skip the e-mailed code and still obtain an OAuth
+ * authorization code for the victim. We open the same session, and if the user still
+ * owes the plugin code we send them to the challenge instead of letting the endpoint
+ * issue a code. A verified session is left exactly as the middleware expects (active,
+ * cookies enabled), so the normal OAuth consent flow is unaffected.
+ */
+function plugin_mfa_enforce_oauth_authorize()
+{
+	// Mirror Glpi\Api\HL\Middleware\CookieAuthMiddleware: start the web session from
+	// the cookie so getLoginUserID() can see a cookie-authenticated user.
+	if (session_status() !== PHP_SESSION_ACTIVE) {
+		$use_cookies = filter_var(ini_get('session.use_cookies'), FILTER_VALIDATE_BOOLEAN);
+		if ($use_cookies !== true) {
+			ini_set('session.use_cookies', '1');
+		}
+		Session::start();
+	}
+
+	$users_id = (int) Session::getLoginUserID();
+	if ($users_id <= 0) {
+		// Not authenticated by cookie: the OAuth flow redirects to login by itself.
+		return;
+	}
+
+	if (!PluginMfaMfa::userMustVerify($users_id)) {
+		return;
+	}
+
+	// Come back to the authorize request (with its OAuth parameters) after the code
+	// is verified, so the consent flow continues where it left off.
+	if (empty($_SESSION['plugin_mfa_pending']['redirect'])) {
+		$_SESSION['plugin_mfa_pending']['redirect'] = $_SERVER['REQUEST_URI'] ?? '';
+	}
+
+	plugin_mfa_redirect_to_challenge();
+}
+
+/**
+ * Send the current request to the challenge page and stop it.
+ *
+ * Runs during the kernel boot phase (POST_INIT), before the controller is
+ * dispatched, so Html::redirect()'s RedirectException would not be caught by the
+ * kernel. Emit the redirect directly and stop the request; the session is flushed so
+ * the pending state persists.
+ *
+ * Fails closed: if output has already started we cannot redirect, so the request is
+ * stopped rather than allowed to render the protected page without the code.
+ */
+function plugin_mfa_redirect_to_challenge()
+{
+	global $CFG_GLPI;
+
+	if (headers_sent()) {
+		Toolbox::logInFile(
+			'mfa',
+			"Unable to redirect to the MFA challenge: output already started; request stopped.\n"
+		);
 		exit();
 	}
+
+	session_write_close();
+	header('Location: ' . $CFG_GLPI['root_doc'] . '/plugins/mfa/front/mfa.form.php', true, 302);
+	exit();
 }

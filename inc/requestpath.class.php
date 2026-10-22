@@ -82,4 +82,20 @@ class PluginMfaRequestpath
             && !$this->isTargetAPhpScript($path)
             && !$this->isHiddenFile($path);
     }
+
+    /**
+     * Whether this request targets the High-Level API OAuth authorization endpoint
+     * (`/api.php/v<version>/authorize`). That endpoint is the only API route that
+     * completes an interactive login from the browser's web-session cookie (through
+     * core's CookieAuthMiddleware), so it is the only API path the enforcement hook
+     * steps into; every other API path is token-based and must be left untouched.
+     *
+     * Matched on the request path info, not a resolved file (the HL API is routed,
+     * not a legacy script). The version segment is optional/liberal so a future
+     * `/v2.3/authorize` is still caught.
+     */
+    public static function isOAuthAuthorizePath(Request $request): bool
+    {
+        return preg_match('#^/api\.php(?:/v[0-9][0-9.]*)?/authorize$#', $request->getPathInfo()) === 1;
+    }
 }

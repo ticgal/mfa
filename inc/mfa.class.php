@@ -452,6 +452,11 @@ class PluginMfaMfa extends CommonDBTM
 
         if (!$DB->tableExists($table)) {
             $migration->displayMessage("Installing $table");
+            // Raw CREATE TABLE is the accepted pattern for a plugin's initial schema in
+            // GLPI 11: Migration has no createTable() builder. The statement is guarded by
+            // tableExists(), carries no user input (only DBConnection helper values), and
+            // every later column change goes through Migration::addField(). Reviewed and
+            // accepted as a non-issue (security audit 2026-10-21).
             $query = "CREATE TABLE IF NOT EXISTS $table (
 				`id` int {$default_key_sign} NOT NULL auto_increment,
 				`users_id` int {$default_key_sign} NOT NULL DEFAULT '0',

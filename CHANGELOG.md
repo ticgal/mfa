@@ -2,6 +2,18 @@
 
 ## 2.0.3 - 2026-10-02
 ## Security
+- Enforce the second factor on the HL API OAuth authorization endpoint
+  (`/api.php/.../authorize`). It completes an interactive login from the browser's
+  web-session cookie, so a user who had entered the password but not the e-mailed
+  code could still obtain an OAuth authorization code (and an access token) for their
+  account. The enforcement hook now sends an unverified session to the challenge
+  before the endpoint issues a code; the normal consent flow is unaffected once the
+  code is verified.
+- Require the code on CAS and x509 logins through the "External Authentication"
+  switch. Previously those interactive single sign-on logins were never challenged
+  even with external authentication enabled, despite the documented coverage.
+- Fail closed in the enforcement hook when output has already started: the request is
+  now stopped instead of being allowed to render the page without the code.
 - Enforce the second factor on the server for every request instead of relying on
   a client-side redirect of the login form. The previous version only changed the
   login form action with JavaScript, so posting the same credentials to
