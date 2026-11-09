@@ -64,6 +64,68 @@ class PluginMfaConfig extends CommonDBTM
 		return "MFA";
 	}
 
+	/**
+	 * Authentication sources that can require the one-time code.
+	 */
+	public const SOURCES = ['local', 'mail', 'ldap', 'external'];
+
+	/**
+	 * Whether GLPI can deliver e-mail notifications: notifications and e-mail
+	 * enabled and the "queuednotification" automatic action (which actually sends
+	 * the queued messages) not disabled. It does not prove that the mail server
+	 * works. The one-time code travels by e-mail, so without it nobody could ever
+	 * complete the challenge.
+	 */
+	public static function isMailAvailable(): bool
+	{
+		global $CFG_GLPI;
+
+		if (empty($CFG_GLPI['use_notifications']) || empty($CFG_GLPI['notifications_mailing'])) {
+			return false;
+		}
+
+		// Notifications are queued, not sent on the spot: with the automatic action
+		// disabled they are created but never leave GLPI.
+		$cron = new CronTask();
+		if ($cron->getFromDBbyName('QueuedNotification', 'queuednotification')) {
+			return (int) $cron->fields['state'] !== CronTask::STATE_DISABLE;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Sources that are enabled in the stored configuration.
+	 *
+	 * @return string[]
+	 */
+	public function getEnabledSources(): array
+	{
+		if (!$this->isLoaded()) {
+			return [];
+		}
+		return array_values(array_filter(self::SOURCES, fn($source) => (int) $this->fields[$source] === 1));
+	}
+
+	/**
+	 * Sources that the submitted values would switch on although they are off today.
+	 *
+	 * @param array $input Submitted form values
+	 *
+	 * @return string[]
+	 */
+	public function getNewlyEnabledSources(array $input): array
+	{
+		$newly = [];
+		foreach (self::SOURCES as $source) {
+			$was_on = $this->isLoaded() && (int) $this->fields[$source] === 1;
+			if (!$was_on && (int) ($input[$source] ?? 0) === 1) {
+				$newly[] = $source;
+			}
+		}
+		return $newly;
+	}
+
 	static function getInstance()
 	{
 		if (!isset(self::$_instance)) {
@@ -77,14 +139,26 @@ class PluginMfaConfig extends CommonDBTM
 
 	static function getConfig($update = false)
 	{
-		$config = null;
-		if (is_null($config)) {
-			$config = new self();
-		}
+		$config = new self();
 		if ($update) {
 			$config->getFromDB(1);
 		}
 		return $config;
+	}
+
+	/**
+	 * Whether the singleton configuration row was actually loaded from the
+	 * database. Used to fail closed: a missing or unreadable configuration must
+	 * never be interpreted as "no second factor required".
+	 */
+	public function isLoaded(): bool
+	{
+		return isset(
+			$this->fields['local'],
+			$this->fields['mail'],
+			$this->fields['ldap'],
+			$this->fields['external']
+		);
 	}
 
 	function getTabNameForItem(CommonGLPI $item, $withtemplate = 0)
@@ -107,31 +181,40 @@ class PluginMfaConfig extends CommonDBTM
 	{
 		$config = new self();
 
+		// The code is delivered by e-mail notification. If that channel is off, any
+		// source enabled below locks its users out (the challenge fails closed), the
+		// administrator included, so warn before they enable one.
+		if (!self::isMailAvailable()) {
+			echo "<div class='alert alert-warning'>";
+			echo __('E-mail notifications are not operative (disabled, or the "Send mails in queue" automatic action is disabled). The one-time code is sent by e-mail, so enabling any option below will lock out its users until notifications work.', 'mfa');
+			echo "</div>";
+		}
+
 		$config->showFormHeader(['colspan' => 2]);
 
 		echo "<tr class='tab_bg_1'>";
-		echo "<td><label for='local'>".__('GLPI Database Authentication','mfa')."</label></td>";
+		echo "<td><label for='local'>" . __('GLPI Database Authentication', 'mfa') . "</label></td>";
 		echo "<td>";
 		Dropdown::showYesNo("local", $config->fields['local']);
 		echo "</td>";
 		echo "</tr>";
 
 		echo "<tr class='tab_bg_1'>";
-		echo "<td><label for='mail'>".__('Mail Server Authentication','mfa')."</label></td>";
+		echo "<td><label for='mail'>" . __('Mail Server Authentication', 'mfa') . "</label></td>";
 		echo "<td>";
 		Dropdown::showYesNo("mail", $config->fields['mail']);
 		echo "</td>";
 		echo "</tr>";
 
 		echo "<tr class='tab_bg_1'>";
-		echo "<td><label for='ldap'>".__('LDAP Directory Authentication','mfa')."</label></td>";
+		echo "<td><label for='ldap'>" . __('LDAP Directory Authentication', 'mfa') . "</label></td>";
 		echo "<td>";
 		Dropdown::showYesNo("ldap", $config->fields['ldap']);
 		echo "</td>";
 		echo "</tr>";
 
 		echo "<tr class='tab_bg_1'>";
-		echo "<td><label for='external'>".__('External Authentication','mfa')."</label></td>";
+		echo "<td><label for='external'>" . __('External Authentication', 'mfa') . "</label></td>";
 		echo "<td>";
 		Dropdown::showYesNo("external", $config->fields['external']);
 		echo "</td>";
@@ -141,24 +224,36 @@ class PluginMfaConfig extends CommonDBTM
 		return false;
 	}
 
-	public function needCode($authtype) {
+	public function needCode($authtype): bool
+	{
+		// Fail closed: if the configuration row could not be loaded (table or row
+		// missing, partial install, restore in progress), require the code instead
+		// of silently letting the login through without a second factor.
+		if (!$this->isLoaded()) {
+			return true;
+		}
 
-		switch ($authtype) {
+		switch ((int) $authtype) {
 			case Auth::DB_GLPI:
-				return $this->fields['local'];
-				break;
+				return (bool) $this->fields['local'];
 			case Auth::LDAP:
-				return $this->fields['ldap'];
-				break;
+				return (bool) $this->fields['ldap'];
 			case Auth::MAIL:
-				return $this->fields['mail'];
-				break;
+				return (bool) $this->fields['mail'];
 			case Auth::EXTERNAL:
-				return $this->fields['external'];
-				break;
+			case Auth::CAS:
+			case Auth::X509:
+				// CAS, x509 and remote-user SSO are all interactive logins that the
+				// core records with their own glpiauthtype; group them under the
+				// "External Authentication" switch so the plugin's claim to cover
+				// SSO/CAS/x509 actually holds.
+				return (bool) $this->fields['external'];
 			default:
+				// Non-interactive contexts only (API token, remember-me cookie):
+				// the core sets glpiauthtype to the account's real authtype for an
+				// interactive login, so an interactive session never reaches here.
+				// These are handled by GLPI itself.
 				return false;
-				break;
 		}
 	}
 
@@ -174,9 +269,13 @@ class PluginMfaConfig extends CommonDBTM
 		$config = new self();
 		if (!$DB->tableExists($table)) {
 			$migration->displayMessage("Installing $table");
+			// Raw CREATE TABLE is the accepted pattern for a plugin's initial schema in
+			// GLPI 11: Migration has no createTable() builder. Guarded by tableExists(),
+			// no user input (only DBConnection helper values). Reviewed and accepted as a
+			// non-issue (security audit 2026-10-21).
 			$query = "CREATE TABLE IF NOT EXISTS $table (
 				`id` int {$default_key_sign} NOT NULL auto_increment,
-				`local` tinyint NOT NULL default '1',
+				`local` tinyint NOT NULL default '0',
 				`mail` tinyint NOT NULL default '0',
 				`ldap` tinyint NOT NULL default '0',
 				`external` tinyint NOT NULL default '0',
@@ -186,11 +285,27 @@ class PluginMfaConfig extends CommonDBTM
 
 			$config->add([
 				'id'       => 1,
-				'local'    => 1,
+				'local'    => 0,
 				'mail'     => 0,
 				'ldap'     => 0,
 				'external' => 0
 			]);
+		} else {
+			// The table survives from a previous version (or from a plugin removed
+			// without being uninstalled) and its stored values are kept on purpose:
+			// silently switching a source off would remove a second factor somebody
+			// may rely on. If e-mail cannot deliver the code, say so loudly instead.
+			$existing = new self();
+			$enabled = $existing->getEnabledSources();
+			if (!empty($enabled) && !self::isMailAvailable()) {
+				$message = sprintf(
+					__('MFA: a previous configuration is kept with these sources enabled: %s. E-mail notifications are not operative (disabled, or the "Send mails in queue" automatic action is disabled), so those users will be asked for a code that cannot be sent and will be locked out. Fix notifications or switch the sources off in Setup > General > MFA.', 'mfa'),
+					implode(', ', $enabled)
+				);
+				Toolbox::logInFile('mfa', $message . "\n");
+				$migration->displayWarning($message);
+				Session::addMessageAfterRedirect($message, false, WARNING);
+			}
 		}
 	}
 

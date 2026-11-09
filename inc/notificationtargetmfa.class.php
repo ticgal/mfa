@@ -42,6 +42,22 @@ class PluginMfaNotificationTargetMfa extends NotificationTarget
 		];
 	}
 
+	/**
+	 * The security-code notification carries the one-time code in clear text. Mark
+	 * its content as non-disclosable so GLPI masks the body in the notification
+	 * queue views and APIs that honour this policy (QueuedNotification), the same
+	 * way the core does for password tokens. This does NOT remove the plaintext
+	 * from the stored queue row: a reader with direct database access can still see
+	 * it until the row is purged. See the CHANGELOG limitation note.
+	 */
+	public function canNotificationContentBeDisclosed(string $event): bool
+	{
+		if ($event === 'securitycodegenerate') {
+			return false;
+		}
+		return parent::canNotificationContentBeDisclosed($event);
+	}
+
 	public function addNotificationTargets($entity)
 	{
 		$this->addTarget(Notification::USER, User::getTypeName(1));

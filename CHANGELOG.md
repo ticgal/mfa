@@ -1,5 +1,83 @@
 # MFA
 
+## 2.0.3 - 2026-10-02
+## Changed
+- No authentication source requires the code right after a fresh install any more
+  (`local` now defaults to off). Since the second factor is enforced on the server,
+  the previous default locked every local user out as soon as the plugin was
+  activated, including the administrator when e-mail was not configured yet. The
+  administrator enables the sources in the MFA tab. Existing installations keep their
+  stored configuration.
+- The MFA configuration tab warns when e-mail notifications are not operative (disabled,
+  or the "Send mails in queue" automatic action is disabled, which leaves the code stuck
+  in the queue), because the code could not be delivered.
+- Switching an authentication source on is refused while e-mail notifications are
+  disabled (the one-time code is sent by e-mail, so its users would be locked out).
+  Switching sources off, or keeping the ones already on, is still allowed so a bad
+  configuration can be repaired.
+- The code page now explains that the code cannot be sent when e-mail notifications are
+  disabled, instead of waiting for a code that never arrives. Access is still denied.
+- Installing over an existing configuration (an update, or a plugin removed without
+  being uninstalled) keeps the stored values, but shows a warning and writes it to the
+  `mfa` log when a source is enabled and e-mail notifications are disabled.
+## Security
+- Enforce the second factor on the HL API OAuth authorization endpoint
+  (`/api.php/.../authorize`). It completes an interactive login from the browser's
+  web-session cookie, so a user who had entered the password but not the e-mailed
+  code could still obtain an OAuth authorization code (and an access token) for their
+  account. The enforcement hook now sends an unverified session to the challenge
+  before the endpoint issues a code; the normal consent flow is unaffected once the
+  code is verified.
+- Require the code on CAS and x509 logins through the "External Authentication"
+  switch. Previously those interactive single sign-on logins were never challenged
+  even with external authentication enabled, despite the documented coverage.
+- Fail closed in the enforcement hook when output has already started: the request is
+  now stopped instead of being allowed to render the page without the code.
+- Enforce the second factor on the server for every request instead of relying on
+  a client-side redirect of the login form. The previous version only changed the
+  login form action with JavaScript, so posting the same credentials to
+  `/front/login.php` (and every SSO/CAS/x509/remember-me login, which never uses the
+  plugin form) opened a full session without the code. A POST_INIT hook now blocks
+  any authenticated-but-unverified session from reaching any page until the code is
+  verified.
+- Decide which requests an unverified session may reach on the resource the GLPI
+  router actually resolves, not on the raw URL. The router ignores a PATH_INFO suffix
+  after a script, so URLs such as `/front/computer.php/x.js` or
+  `/front/central.php/plugins/mfa/front/mfa.form.php` ran the script while matching
+  the static-file or challenge allow-list, which bypassed the second factor.
+- Stop publishing the native `mfa_pre_auth` / `mfa_success` session keys. The plugin
+  used the core 2FA pre-authentication shape before the e-mailed code was verified,
+  which let the native `/MFA/Setup` and `/MFA/Verify` routes register an attacker's
+  own TOTP and complete the login without the code. The plugin now keeps a private
+  pending state and hands over control only after its own code is verified.
+- Fail closed around code issuance. The session is validated by the core, but the
+  plugin no longer grants a usable session while the code is generated and sent: an
+  unverified session is blocked by the enforcement hook, so a failure while issuing
+  or notifying the code leaves the user without access instead of logged in.
+- Fail closed on a missing configuration. An absent configuration row used to be read
+  as "no code required"; it is now treated as "code required".
+- Bind each code to the specific pending challenge held server side and consume it
+  atomically (single-winner delete, verified by affected-row count). The same code
+  can no longer validate two concurrent sessions, one session cannot use another's
+  challenge, and a failed delete can no longer be reported as success.
+- Serialise the verification rate limiter with a per-user lock so concurrent attempts
+  can no longer exceed the 5-attempt limit on a single node. Multi-node deployments
+  need a shared cache/lock backend (see README).
+- Throttle code issuance (per user) and reuse a still-valid code instead of sending a
+  new one on every request, to prevent mailbox flooding and repeated invalidation of
+  the legitimate code.
+- Mask the security-code notification body in the GLPI queue views and APIs by
+  overriding `canNotificationContentBeDisclosed()`. Note: this does not remove the
+  plaintext code from the stored queue row, so a reader with direct database access
+  can still see it until the row is purged. The hash only protects the plugin's own
+  table.
+## Notes
+- The plugin protects interactive web logins. It does not add a second factor to the
+  REST API or the High-Level API (OAuth password grant); disable credential/password
+  login there if those channels must be covered. See README.
+- The expired-code cleanup task is now registered at install/upgrade instead of on
+  every request.
+
 ## 2.0.2 - 2026-09-30
 ## Security
 - Fix authentication bypass: the plugin completed the login before asking for the
