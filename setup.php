@@ -28,9 +28,9 @@
  ----------------------------------------------------------------------
 */
 
-define('PLUGIN_MFA_VERSION', '2.0.3-beta.1');
-define('PLUGIN_MFA_MIN_GLPI', '11.0');
-define('PLUGIN_MFA_MAX_GLPI', '12.0');
+define('PLUGIN_MFA_VERSION', '2.0.3-beta2');
+define('PLUGIN_MFA_MIN_GLPI', '11.0.0');
+define('PLUGIN_MFA_MAX_GLPI', '11.0.99');
 
 use Glpi\Plugin\Hooks;
 

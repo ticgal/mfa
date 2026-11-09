@@ -117,33 +117,44 @@ class PluginMfaConfig extends CommonDBTM
 
 	static function showConfigForm()
 	{
+		global $CFG_GLPI;
+
 		$config = new self();
+
+		// The code is delivered by e-mail notification. If that channel is off, any
+		// source enabled below locks its users out (the challenge fails closed), the
+		// administrator included, so warn before they enable one.
+		if (empty($CFG_GLPI['use_notifications']) || empty($CFG_GLPI['notifications_mailing'])) {
+			echo "<div class='alert alert-warning'>";
+			echo __('E-mail notifications are not enabled. The one-time code is sent by e-mail, so enabling any option below will lock out its users until notifications are configured.', 'mfa');
+			echo "</div>";
+		}
 
 		$config->showFormHeader(['colspan' => 2]);
 
 		echo "<tr class='tab_bg_1'>";
-		echo "<td><label for='local'>".__('GLPI Database Authentication','mfa')."</label></td>";
+		echo "<td><label for='local'>" . __('GLPI Database Authentication', 'mfa') . "</label></td>";
 		echo "<td>";
 		Dropdown::showYesNo("local", $config->fields['local']);
 		echo "</td>";
 		echo "</tr>";
 
 		echo "<tr class='tab_bg_1'>";
-		echo "<td><label for='mail'>".__('Mail Server Authentication','mfa')."</label></td>";
+		echo "<td><label for='mail'>" . __('Mail Server Authentication', 'mfa') . "</label></td>";
 		echo "<td>";
 		Dropdown::showYesNo("mail", $config->fields['mail']);
 		echo "</td>";
 		echo "</tr>";
 
 		echo "<tr class='tab_bg_1'>";
-		echo "<td><label for='ldap'>".__('LDAP Directory Authentication','mfa')."</label></td>";
+		echo "<td><label for='ldap'>" . __('LDAP Directory Authentication', 'mfa') . "</label></td>";
 		echo "<td>";
 		Dropdown::showYesNo("ldap", $config->fields['ldap']);
 		echo "</td>";
 		echo "</tr>";
 
 		echo "<tr class='tab_bg_1'>";
-		echo "<td><label for='external'>".__('External Authentication','mfa')."</label></td>";
+		echo "<td><label for='external'>" . __('External Authentication', 'mfa') . "</label></td>";
 		echo "<td>";
 		Dropdown::showYesNo("external", $config->fields['external']);
 		echo "</td>";
@@ -153,8 +164,8 @@ class PluginMfaConfig extends CommonDBTM
 		return false;
 	}
 
-	public function needCode($authtype): bool {
-
+	public function needCode($authtype): bool
+	{
 		// Fail closed: if the configuration row could not be loaded (table or row
 		// missing, partial install, restore in progress), require the code instead
 		// of silently letting the login through without a second factor.
@@ -204,7 +215,7 @@ class PluginMfaConfig extends CommonDBTM
 			// non-issue (security audit 2026-10-21).
 			$query = "CREATE TABLE IF NOT EXISTS $table (
 				`id` int {$default_key_sign} NOT NULL auto_increment,
-				`local` tinyint NOT NULL default '1',
+				`local` tinyint NOT NULL default '0',
 				`mail` tinyint NOT NULL default '0',
 				`ldap` tinyint NOT NULL default '0',
 				`external` tinyint NOT NULL default '0',
@@ -214,7 +225,7 @@ class PluginMfaConfig extends CommonDBTM
 
 			$config->add([
 				'id'       => 1,
-				'local'    => 1,
+				'local'    => 0,
 				'mail'     => 0,
 				'ldap'     => 0,
 				'external' => 0

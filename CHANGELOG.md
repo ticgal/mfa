@@ -1,6 +1,15 @@
 # MFA
 
 ## 2.0.3 - 2026-10-02
+## Changed
+- No authentication source requires the code right after a fresh install any more
+  (`local` now defaults to off). Since the second factor is enforced on the server,
+  the previous default locked every local user out as soon as the plugin was
+  activated, including the administrator when e-mail was not configured yet. The
+  administrator enables the sources in the MFA tab. Existing installations keep their
+  stored configuration.
+- The MFA configuration tab warns when e-mail notifications are disabled, because the
+  code could not be delivered.
 ## Security
 - Enforce the second factor on the HL API OAuth authorization endpoint
   (`/api.php/.../authorize`). It completes an interactive login from the browser's
