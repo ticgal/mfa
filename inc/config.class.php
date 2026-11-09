@@ -70,15 +70,28 @@ class PluginMfaConfig extends CommonDBTM
 	public const SOURCES = ['local', 'mail', 'ldap', 'external'];
 
 	/**
-	 * Whether GLPI can send e-mail notifications at all (global settings only: it
-	 * does not prove that the mail server works). The one-time code travels by
-	 * e-mail, so without it nobody could ever complete the challenge.
+	 * Whether GLPI can deliver e-mail notifications: notifications and e-mail
+	 * enabled and the "queuednotification" automatic action (which actually sends
+	 * the queued messages) not disabled. It does not prove that the mail server
+	 * works. The one-time code travels by e-mail, so without it nobody could ever
+	 * complete the challenge.
 	 */
 	public static function isMailAvailable(): bool
 	{
 		global $CFG_GLPI;
 
-		return !empty($CFG_GLPI['use_notifications']) && !empty($CFG_GLPI['notifications_mailing']);
+		if (empty($CFG_GLPI['use_notifications']) || empty($CFG_GLPI['notifications_mailing'])) {
+			return false;
+		}
+
+		// Notifications are queued, not sent on the spot: with the automatic action
+		// disabled they are created but never leave GLPI.
+		$cron = new CronTask();
+		if ($cron->getFromDBbyName('QueuedNotification', 'queuednotification')) {
+			return (int) $cron->fields['state'] !== CronTask::STATE_DISABLE;
+		}
+
+		return true;
 	}
 
 	/**
@@ -173,7 +186,7 @@ class PluginMfaConfig extends CommonDBTM
 		// administrator included, so warn before they enable one.
 		if (!self::isMailAvailable()) {
 			echo "<div class='alert alert-warning'>";
-			echo __('E-mail notifications are not enabled. The one-time code is sent by e-mail, so enabling any option below will lock out its users until notifications are configured.', 'mfa');
+			echo __('E-mail notifications are not operative (disabled, or the "Send mails in queue" automatic action is disabled). The one-time code is sent by e-mail, so enabling any option below will lock out its users until notifications work.', 'mfa');
 			echo "</div>";
 		}
 
@@ -286,7 +299,7 @@ class PluginMfaConfig extends CommonDBTM
 			$enabled = $existing->getEnabledSources();
 			if (!empty($enabled) && !self::isMailAvailable()) {
 				$message = sprintf(
-					__('MFA: a previous configuration is kept with these sources enabled: %s. E-mail notifications are not enabled, so those users will be asked for a code that cannot be sent and will be locked out. Enable notifications or switch the sources off in Setup > General > MFA.', 'mfa'),
+					__('MFA: a previous configuration is kept with these sources enabled: %s. E-mail notifications are not operative (disabled, or the "Send mails in queue" automatic action is disabled), so those users will be asked for a code that cannot be sent and will be locked out. Fix notifications or switch the sources off in Setup > General > MFA.', 'mfa'),
 					implode(', ', $enabled)
 				);
 				Toolbox::logInFile('mfa', $message . "\n");

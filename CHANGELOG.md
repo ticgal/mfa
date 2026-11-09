@@ -8,8 +8,9 @@
   activated, including the administrator when e-mail was not configured yet. The
   administrator enables the sources in the MFA tab. Existing installations keep their
   stored configuration.
-- The MFA configuration tab warns when e-mail notifications are disabled, because the
-  code could not be delivered.
+- The MFA configuration tab warns when e-mail notifications are not operative (disabled,
+  or the "Send mails in queue" automatic action is disabled, which leaves the code stuck
+  in the queue), because the code could not be delivered.
 - Switching an authentication source on is refused while e-mail notifications are
   disabled (the one-time code is sent by e-mail, so its users would be locked out).
   Switching sources off, or keeping the ones already on, is still allowed so a bad

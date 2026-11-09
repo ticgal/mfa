@@ -49,7 +49,7 @@ if (isset($_POST["update"])) {
 	$config->getFromDB((int) $_POST['id']);
 	if (!PluginMfaConfig::isMailAvailable() && !empty($config->getNewlyEnabledSources($_POST))) {
 		Session::addMessageAfterRedirect(
-			__('The configuration was not saved: E-mail notifications are not enabled, so the one-time code could not be sent and the users of the enabled sources would be locked out. Enable e-mail notifications first.', 'mfa'),
+			__('The configuration was not saved: E-mail notifications are not operative (disabled, or the "Send mails in queue" automatic action is disabled), so the one-time code could not be sent and the users of the enabled sources would be locked out. Make e-mail notifications work first.', 'mfa'),
 			false,
 			ERROR
 		);

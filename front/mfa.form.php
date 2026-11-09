@@ -115,7 +115,7 @@ if (!PluginMfaConfig::isMailAvailable()) {
     // waits for a code that will never arrive. Access is NOT granted: the session
     // stays unverified (fail closed).
     Html::nullHeader("Login", $CFG_GLPI["root_doc"] . '/index.php');
-    echo '<div class="center b" style="color:red">' . __('The one-time code cannot be sent because e-mail notifications are not enabled in GLPI. Please contact your administrator.', 'mfa') . '</div>';
+    echo '<div class="center b" style="color:red">' . __('The one-time code cannot be sent because e-mail notifications are not operative in GLPI. Please contact your administrator.', 'mfa') . '</div>';
     echo '<div class="center"><br><a class="btn btn-secondary" href="' . $CFG_GLPI["root_doc"] . '/front/logout.php?noAUTO=1">' . __('Log in again') . '</a></div>';
     Html::nullFooter();
     exit();

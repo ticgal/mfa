@@ -36,14 +36,17 @@ Please check the info here: https://tic.gal/en/mfa-for-glpi-does-exactly-what-yo
 # Locked out?
 
 The one-time code is sent by e-mail, so GLPI e-mail notifications must be enabled
-(Setup > Notifications) before an authentication source is switched on in the MFA tab.
-The plugin refuses to switch a source on while they are disabled.
+(Setup > Notifications) and the automatic action "Send mails in queue" must be enabled
+(Setup > Automatic actions), otherwise notifications are queued but never sent. Do this
+before an authentication source is switched on in the MFA tab; the plugin refuses to
+switch a source on while they are not operative. It cannot verify that the mail server
+itself works.
 
 If users are asked for a code that never arrives (for example after reinstalling over
 the table of a previous version, or after notifications were turned off), recover with
 one of these:
 
-- Enable e-mail notifications and make sure the "Security code" notification works.
+- Enable e-mail notifications and the "Send mails in queue" automatic action, and make sure the "Security code" notification works.
 - Switch the sources off in the database:
   `UPDATE glpi_plugin_mfa_configs SET local = 0, mail = 0, ldap = 0, external = 0 WHERE id = 1;`
 - Disable the plugin from the console: `php bin/console glpi:plugin:deactivate mfa`.

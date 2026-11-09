@@ -66,14 +66,14 @@ msgstr ""
 msgid "Please verify it as soon as possible; this OTP will expire quickly."
 msgstr ""
 
-msgid "MFA: a previous configuration is kept with these sources enabled: %s. E-mail notifications are not enabled, so those users will be asked for a code that cannot be sent and will be locked out. Enable notifications or switch the sources off in Setup > General > MFA."
+msgid "MFA: a previous configuration is kept with these sources enabled: %s. E-mail notifications are not operative (disabled, or the \"Send mails in queue\" automatic action is disabled), so those users will be asked for a code that cannot be sent and will be locked out. Fix notifications or switch the sources off in Setup > General > MFA."
 msgstr ""
 
-msgid "The configuration was not saved: E-mail notifications are not enabled, so the one-time code could not be sent and the users of the enabled sources would be locked out. Enable e-mail notifications first."
+msgid "The configuration was not saved: E-mail notifications are not operative (disabled, or the \"Send mails in queue\" automatic action is disabled), so the one-time code could not be sent and the users of the enabled sources would be locked out. Make e-mail notifications work first."
 msgstr ""
 
-msgid "The one-time code cannot be sent because e-mail notifications are not enabled in GLPI. Please contact your administrator."
+msgid "The one-time code cannot be sent because e-mail notifications are not operative in GLPI. Please contact your administrator."
 msgstr ""
 
-msgid "E-mail notifications are not enabled. The one-time code is sent by e-mail, so enabling any option below will lock out its users until notifications are configured."
+msgid "E-mail notifications are not operative (disabled, or the \"Send mails in queue\" automatic action is disabled). The one-time code is sent by e-mail, so enabling any option below will lock out its users until notifications work."
 msgstr ""
