@@ -1,5 +1,38 @@
 # MFA
 
+## 3.0.1-beta.1 - 2026-11-09
+## Security
+- A session waiting for its code no longer counts as authenticated for anything that reads the session
+  (legacy REST API `Session-Token`, high-level API authorisation endpoint): its identity is kept aside by
+  the plugin until the code is verified.
+- Refuse the sign-in methods that use the password alone and never reach the code form, for the accounts
+  that need a code: CalDAV, legacy REST API `initSession` with login and password, and the high-level API
+  OAuth `password` grant.
+- A TOTP enrolled during the login itself (native 2FA setup step) no longer waives the plugin code: only a
+  TOTP that existed before the login does.
+## Features
+- The configuration cannot turn an authentication type on while codes cannot be delivered (e-mail
+  notifications disabled, notification inactive) or while the automatic action that sends the queued
+  mails (`queuednotification`) is disabled. Turning a type off is always possible.
+- Activating the plugin warns when a stored configuration would lock users out. The configuration tab
+  also warns when the queue action has not run for more than a day.
+- The code screen tells the user when the mail server refused the code, instead of waiting for a code
+  that never arrives; reloading the page tries again.
+- New switch for CAS and x509 accounts, which were never asked for a code. Existing installations get it
+  set to "No" when the plugin is updated.
+- New installations start with every authentication type set to "No".
+## Bugfixes
+- The code form is shown in normal mode (no debug bar, no rejected debug requests) while a code is pending;
+  the debug mode is restored once it is verified.
+- Sessions opened before the plugin was activated are no longer sent to the code form right after
+  activating it.
+- The requested page is kept relative to the GLPI root, so the redirection after the code also works when
+  GLPI is served from a sub-directory.
+- The automatic action is registered at install time, not on every request.
+## Documentation
+- README: entry points covered by the plugin, limitations, and how to recover when the plugin folder was
+  deleted without uninstalling it.
+
 ## 3.0.0 - 2026-10-01
 ## Feature
 - GLPI 12 support

@@ -36,7 +36,16 @@ http://www.gnu.org/licenses/agpl-3.0-standalone.html
         <div class="alert alert-warning" role="alert">
             <i class="ti ti-alert-triangle me-1" aria-hidden="true"></i>
             {{ warning }}
-            {{ __('Users covered by MFA will not be able to sign in until this is fixed.', 'mfa') }}
+            {% if warning_blocks_login %}
+                {{ __('Users covered by MFA will not be able to sign in until this is fixed.', 'mfa') }}
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {% if queue_warning %}
+        <div class="alert alert-info" role="alert">
+            <i class="ti ti-info-circle me-1" aria-hidden="true"></i>
+            {{ queue_warning }}
         </div>
     {% endif %}
 
@@ -45,6 +54,7 @@ http://www.gnu.org/licenses/agpl-3.0-standalone.html
         {{ fields.dropdownYesNo('mail', config.mail, __('Mail Server Authentication', 'mfa'), {disabled: not canedit}) }}
         {{ fields.dropdownYesNo('ldap', config.ldap, __('LDAP Directory Authentication', 'mfa'), {disabled: not canedit}) }}
         {{ fields.dropdownYesNo('external', config.external, __('External Authentication', 'mfa'), {disabled: not canedit}) }}
+        {{ fields.dropdownYesNo('other', config.other, __('CAS and x509 certificate Authentication', 'mfa'), {disabled: not canedit}) }}
     </div>
 
     {% if canedit %}

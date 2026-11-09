@@ -148,10 +148,56 @@ class Config extends CommonDBTM
             'config'   => $config->fields,
             'form_url' => self::getFormURL(),
             'canedit'  => self::canUpdate(),
-            'warning'  => Mfa::globalDeliveryProblem(),
+            'warning'  => Mfa::configurationProblem(),
+            'warning_blocks_login' => Mfa::globalDeliveryProblem() !== null,
+            'queue_warning' => Mfa::queueWarning(),
         ]);
 
         return true;
+    }
+
+    /** Settings that make an account source need a code. */
+    private const SOURCES = ['local', 'mail', 'ldap', 'external', 'other'];
+
+    /**
+     * Refuse to turn a source on while codes cannot be delivered: every account of that source
+     * would be locked out at its next login. Turning a source off is always allowed.
+     */
+    public function prepareInputForUpdate($input)
+    {
+        $problem = Mfa::configurationProblem();
+        if ($problem !== null) {
+            foreach (self::SOURCES as $source) {
+                if (!empty($input[$source]) && empty($this->fields[$source])) {
+                    Session::addMessageAfterRedirect(
+                        $problem . ' ' . __('Fix it before enabling this authentication type, or the users of that type would not be able to sign in.', 'mfa'),
+                        false,
+                        ERROR,
+                    );
+
+                    return false;
+                }
+            }
+        }
+
+        return $input;
+    }
+
+    /**
+     * Are some sources already set to require a code (for instance a configuration kept from a
+     * previous installation)?
+     */
+    public static function hasSourceEnabled(): bool
+    {
+        $config = new self();
+
+        foreach (self::SOURCES as $source) {
+            if (!empty($config->fields[$source])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function needCode($authtype)
@@ -165,6 +211,9 @@ class Config extends CommonDBTM
                 return $this->fields['mail'];
             case Auth::EXTERNAL:
                 return $this->fields['external'];
+            case Auth::CAS:
+            case Auth::X509:
+                return $this->fields['other'] ?? false;
             default:
                 return false;
         }
@@ -184,22 +233,27 @@ class Config extends CommonDBTM
             $migration->displayMessage("Installing $table");
             $query = "CREATE TABLE IF NOT EXISTS $table (
 				`id` int {$default_key_sign} NOT NULL auto_increment,
-				`local` tinyint NOT NULL default '1',
+				`local` tinyint NOT NULL default '0',
 				`mail` tinyint NOT NULL default '0',
 				`ldap` tinyint NOT NULL default '0',
 				`external` tinyint NOT NULL default '0',
+				`other` tinyint NOT NULL default '0',
 				PRIMARY KEY (`id`)
 				) ENGINE=InnoDB DEFAULT CHARSET={$default_charset} COLLATE={$default_collation} ROW_FORMAT=DYNAMIC;";
             $DB->doQuery($query);
 
             $config->add([
                 'id'       => 1,
-                'local'    => 1,
+                'local'    => 0,
                 'mail'     => 0,
                 'ldap'     => 0,
                 'external' => 0,
+                'other'    => 0,
             ]);
         }
+
+        // Installations from before this setting existed.
+        $migration->addField($table, 'other', 'bool', ['value' => 0, 'after' => 'external']);
     }
 
     public static function uninstall(Migration $migration)
