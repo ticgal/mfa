@@ -41,6 +41,21 @@ Session::checkRight('config', UPDATE);
 $config = new PluginMfaConfig();
 if (isset($_POST["update"])) {
 	$config->check($_POST['id'], UPDATE);
+
+	// The one-time code is sent by e-mail. Refuse to switch a source on while e-mail
+	// notifications are off: every user of that source (the administrator included)
+	// would be locked out at the next request. Switching sources off, or leaving the
+	// ones already on, is always allowed so the situation can be repaired.
+	$config->getFromDB((int) $_POST['id']);
+	if (!PluginMfaConfig::isMailAvailable() && !empty($config->getNewlyEnabledSources($_POST))) {
+		Session::addMessageAfterRedirect(
+			__('The configuration was not saved: E-mail notifications are not enabled, so the one-time code could not be sent and the users of the enabled sources would be locked out. Enable e-mail notifications first.', 'mfa'),
+			false,
+			ERROR
+		);
+		Html::back();
+	}
+
 	$config->update($_POST);
 	Html::back();
 }

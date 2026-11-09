@@ -64,6 +64,55 @@ class PluginMfaConfig extends CommonDBTM
 		return "MFA";
 	}
 
+	/**
+	 * Authentication sources that can require the one-time code.
+	 */
+	public const SOURCES = ['local', 'mail', 'ldap', 'external'];
+
+	/**
+	 * Whether GLPI can send e-mail notifications at all (global settings only: it
+	 * does not prove that the mail server works). The one-time code travels by
+	 * e-mail, so without it nobody could ever complete the challenge.
+	 */
+	public static function isMailAvailable(): bool
+	{
+		global $CFG_GLPI;
+
+		return !empty($CFG_GLPI['use_notifications']) && !empty($CFG_GLPI['notifications_mailing']);
+	}
+
+	/**
+	 * Sources that are enabled in the stored configuration.
+	 *
+	 * @return string[]
+	 */
+	public function getEnabledSources(): array
+	{
+		if (!$this->isLoaded()) {
+			return [];
+		}
+		return array_values(array_filter(self::SOURCES, fn($source) => (int) $this->fields[$source] === 1));
+	}
+
+	/**
+	 * Sources that the submitted values would switch on although they are off today.
+	 *
+	 * @param array $input Submitted form values
+	 *
+	 * @return string[]
+	 */
+	public function getNewlyEnabledSources(array $input): array
+	{
+		$newly = [];
+		foreach (self::SOURCES as $source) {
+			$was_on = $this->isLoaded() && (int) $this->fields[$source] === 1;
+			if (!$was_on && (int) ($input[$source] ?? 0) === 1) {
+				$newly[] = $source;
+			}
+		}
+		return $newly;
+	}
+
 	static function getInstance()
 	{
 		if (!isset(self::$_instance)) {
@@ -117,14 +166,12 @@ class PluginMfaConfig extends CommonDBTM
 
 	static function showConfigForm()
 	{
-		global $CFG_GLPI;
-
 		$config = new self();
 
 		// The code is delivered by e-mail notification. If that channel is off, any
 		// source enabled below locks its users out (the challenge fails closed), the
 		// administrator included, so warn before they enable one.
-		if (empty($CFG_GLPI['use_notifications']) || empty($CFG_GLPI['notifications_mailing'])) {
+		if (!self::isMailAvailable()) {
 			echo "<div class='alert alert-warning'>";
 			echo __('E-mail notifications are not enabled. The one-time code is sent by e-mail, so enabling any option below will lock out its users until notifications are configured.', 'mfa');
 			echo "</div>";
@@ -230,6 +277,22 @@ class PluginMfaConfig extends CommonDBTM
 				'ldap'     => 0,
 				'external' => 0
 			]);
+		} else {
+			// The table survives from a previous version (or from a plugin removed
+			// without being uninstalled) and its stored values are kept on purpose:
+			// silently switching a source off would remove a second factor somebody
+			// may rely on. If e-mail cannot deliver the code, say so loudly instead.
+			$existing = new self();
+			$enabled = $existing->getEnabledSources();
+			if (!empty($enabled) && !self::isMailAvailable()) {
+				$message = sprintf(
+					__('MFA: a previous configuration is kept with these sources enabled: %s. E-mail notifications are not enabled, so those users will be asked for a code that cannot be sent and will be locked out. Enable notifications or switch the sources off in Setup > General > MFA.', 'mfa'),
+					implode(', ', $enabled)
+				);
+				Toolbox::logInFile('mfa', $message . "\n");
+				$migration->displayWarning($message);
+				Session::addMessageAfterRedirect($message, false, WARNING);
+			}
 		}
 	}
 

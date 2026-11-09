@@ -10,6 +10,15 @@
   stored configuration.
 - The MFA configuration tab warns when e-mail notifications are disabled, because the
   code could not be delivered.
+- Switching an authentication source on is refused while e-mail notifications are
+  disabled (the one-time code is sent by e-mail, so its users would be locked out).
+  Switching sources off, or keeping the ones already on, is still allowed so a bad
+  configuration can be repaired.
+- The code page now explains that the code cannot be sent when e-mail notifications are
+  disabled, instead of waiting for a code that never arrives. Access is still denied.
+- Installing over an existing configuration (an update, or a plugin removed without
+  being uninstalled) keeps the stored values, but shows a warning and writes it to the
+  `mfa` log when a source is enabled and e-mail notifications are disabled.
 ## Security
 - Enforce the second factor on the HL API OAuth authorization endpoint
   (`/api.php/.../authorize`). It completes an interactive login from the browser's

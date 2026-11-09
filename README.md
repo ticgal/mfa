@@ -33,6 +33,25 @@ Please check the info here: https://tic.gal/en/mfa-for-glpi-does-exactly-what-yo
   views and APIs mask it, but a reader with direct database access can still read it
   until the row is purged.
 
+# Locked out?
+
+The one-time code is sent by e-mail, so GLPI e-mail notifications must be enabled
+(Setup > Notifications) before an authentication source is switched on in the MFA tab.
+The plugin refuses to switch a source on while they are disabled.
+
+If users are asked for a code that never arrives (for example after reinstalling over
+the table of a previous version, or after notifications were turned off), recover with
+one of these:
+
+- Enable e-mail notifications and make sure the "Security code" notification works.
+- Switch the sources off in the database:
+  `UPDATE glpi_plugin_mfa_configs SET local = 0, mail = 0, ldap = 0, external = 0 WHERE id = 1;`
+- Disable the plugin from the console: `php bin/console glpi:plugin:deactivate mfa`.
+
+Always remove the plugin with **Uninstall** in GLPI before deleting its folder. Deleting
+the folder leaves the `glpi_plugin_mfa_configs` table behind and a later install keeps
+its old values (a version before 2.0.3 created it with the local source switched on).
+
 # Contribute
 
 Please, fell free to suggest an enhancement of fix via a PR.

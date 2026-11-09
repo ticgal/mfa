@@ -110,6 +110,17 @@ if (isset($_POST['code'])) {
 // fresh one (subject to the per-user issuance throttle) so that navigating
 // while unverified does not re-send a code on every request.
 // -----------------------------------------------------------------------
+if (!PluginMfaConfig::isMailAvailable()) {
+    // The code can only be delivered by e-mail. Say so instead of showing a form that
+    // waits for a code that will never arrive. Access is NOT granted: the session
+    // stays unverified (fail closed).
+    Html::nullHeader("Login", $CFG_GLPI["root_doc"] . '/index.php');
+    echo '<div class="center b" style="color:red">' . __('The one-time code cannot be sent because e-mail notifications are not enabled in GLPI. Please contact your administrator.', 'mfa') . '</div>';
+    echo '<div class="center"><br><a class="btn btn-secondary" href="' . $CFG_GLPI["root_doc"] . '/front/logout.php?noAUTO=1">' . __('Log in again') . '</a></div>';
+    Html::nullFooter();
+    exit();
+}
+
 $mfa_id = (int) ($_SESSION['plugin_mfa_pending']['mfa_id'] ?? 0);
 
 if (!PluginMfaMfa::isPendingValid($users_id, $mfa_id)) {
