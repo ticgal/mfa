@@ -1,6 +1,6 @@
 # MFA
 
-## 3.0.1-beta.1 - 2026-11-09
+## 3.0.1 - 2026-11-09
 ## Security
 - A session waiting for its code no longer counts as authenticated for anything that reads the session
   (legacy REST API `Session-Token`, high-level API authorisation endpoint): its identity is kept aside by
