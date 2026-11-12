@@ -109,9 +109,32 @@ function plugin_mfa_uninstall()
     return true;
 }
 
+/**
+ * Called by the core every time the plugin is activated.
+ */
+function plugin_mfa_activate(): void
+{
+    Guard::markActivation();
+
+    // A configuration kept from a previous installation applies as soon as the plugin is active.
+    $queue_warning = Mfa::queueWarning();
+    if ($queue_warning !== null) {
+        Session::addMessageAfterRedirect($queue_warning, false, WARNING);
+    }
+
+    $problem = Mfa::configurationProblem();
+    if ($problem !== null && Config::hasSourceEnabled()) {
+        Session::addMessageAfterRedirect(
+            $problem . ' ' . __('The stored MFA configuration requires a code for some users, so they will not be able to sign in. Fix the notifications, or set the authentication types to "No" in the MFA tab of the general configuration.', 'mfa'),
+            false,
+            WARNING,
+        );
+    }
+}
+
 function plugin_mfa_init_session(): void
 {
-    Guard::restoreAfterSessionInit();
+    Guard::onSessionInit();
 }
 
 function plugin_mfa_post_init(): void

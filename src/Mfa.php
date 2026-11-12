@@ -32,6 +32,7 @@
 namespace GlpiPlugin\Mfa;
 
 use CommonDBTM;
+use CronTask;
 use DBConnection;
 use Glpi\Application\View\TemplateRenderer;
 use Migration;
@@ -43,6 +44,8 @@ use Symfony\Component\Cache\Adapter\Psr16Adapter;
 use Symfony\Component\RateLimiter\LimiterInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\CacheStorage;
+
+use function Safe\strtotime;
 
 class Mfa extends CommonDBTM
 {
@@ -129,6 +132,73 @@ class Mfa extends CommonDBTM
     }
 
     /**
+     * The automatic action that sends the queued mails is disabled.
+     *
+     * Security codes are sent immediately, so this does not stop a code from being sent, but one
+     * whose first send fails stays in the queue and nothing retries it. That makes a mail problem
+     * permanent and invisible, so it is a configuration problem: it blocks enabling the plugin
+     * for an authentication type. It is not checked when a code is issued.
+     */
+    public static function queueDisabledProblem(): ?string
+    {
+        $task = new CronTask();
+        if (
+            $task->getFromDBbyName('QueuedNotification', 'queuednotification')
+            && (int) $task->fields['state'] === CronTask::STATE_DISABLE
+        ) {
+            return __('The automatic action "Send mails in queue" (queuednotification) is disabled: a security code whose first send fails is never retried.', 'mfa');
+        }
+
+        return null;
+    }
+
+    /**
+     * Why the plugin cannot be relied on to deliver codes, for the places where it is configured.
+     */
+    public static function configurationProblem(): ?string
+    {
+        return self::globalDeliveryProblem() ?? self::queueDisabledProblem();
+    }
+
+    /**
+     * Informative warning when the queue action is enabled but looks stuck (not a blocking check:
+     * there is no right threshold).
+     */
+    public static function queueWarning(): ?string
+    {
+        $task = new CronTask();
+        if (!$task->getFromDBbyName('QueuedNotification', 'queuednotification')) {
+            return null;
+        }
+
+        $last_run = $task->fields['lastrun'] ?? null;
+        if (
+            (int) $task->fields['state'] !== CronTask::STATE_DISABLE
+            && is_string($last_run)
+            && $last_run !== ''
+            && strtotime($last_run) < time() - DAY_TIMESTAMP
+        ) {
+            return __('The automatic action "Send mails in queue" (queuednotification) has not run for more than a day: a security code whose first send fails may not be retried.', 'mfa');
+        }
+
+        return null;
+    }
+
+    /**
+     * Did the immediate send of this code fail? A mail that went out is flagged as sent in the
+     * queue; one the mail server refused stays there unsent.
+     */
+    public static function isSendFailed(int $mfa_id): bool
+    {
+        return countElementsInTable('glpi_queuednotifications', [
+            'itemtype'  => self::class,
+            'items_id'  => $mfa_id,
+            'event'     => 'securitycodegenerate',
+            'sent_time' => null,
+        ]) > 0;
+    }
+
+    /**
      * Why no code can be delivered to this user, or null when it can.
      */
     public static function deliveryProblem(int $users_id): ?string
@@ -209,7 +279,7 @@ class Mfa extends CommonDBTM
         ]);
     }
 
-    public static function getRandomInt($length)
+    private static function generateCode(int $length): string
     {
         $keyspace = '0123456789';
         $str = '';
@@ -231,7 +301,7 @@ class Mfa extends CommonDBTM
      * carries the plaintext), so a read of the table during its validity window
      * does not hand over a usable second factor.
      */
-    public static function issueCode(int $users_id): void
+    public static function issueCode(int $users_id): int
     {
         global $DB;
 
@@ -240,7 +310,7 @@ class Mfa extends CommonDBTM
             $mfa->delete(['id' => $row['id']]);
         }
 
-        $plain = self::getRandomInt(6);
+        $plain = self::generateCode(6);
         $mfa->add([
             'users_id' => $users_id,
             'code'     => password_hash($plain, PASSWORD_DEFAULT),
@@ -261,6 +331,8 @@ class Mfa extends CommonDBTM
         // reload from DB), so overriding the field here is enough.
         $mfa->fields['code'] = $plain;
         NotificationEvent::raiseEvent('securitycodegenerate', $mfa, ['entities_id' => 0]);
+
+        return (int) $mfa->getID();
     }
 
     /**
@@ -325,10 +397,18 @@ class Mfa extends CommonDBTM
 
             $DB->doQuery($query);
         }
+
+        // Registered here, not on every request: it only has to exist once.
+        $migration->addCrontask(self::class, 'expiredSecurityCode', HOUR_TIMESTAMP, 5);
     }
 
     public static function uninstall(Migration $migration)
     {
+        global $DB;
+
+        $DB->delete('glpi_crontasks', ['itemtype' => self::class]);
+        $migration->removeConfig(['activated_at'], 'plugin:mfa');
+
         $table = self::getTable();
         $migration->displayMessage("Uninstalling $table");
         $migration->dropTable($table);

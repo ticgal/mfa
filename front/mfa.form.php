@@ -44,7 +44,7 @@ if (!Guard::isPending()) {
     Html::redirect($CFG_GLPI['root_doc'] . '/index.php');
 }
 
-$users_id = (int) Session::getLoginUserID();
+$users_id = Guard::getPendingUserId();
 $error    = null;
 
 if (isset($_POST['code'])) {
