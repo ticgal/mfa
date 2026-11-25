@@ -204,13 +204,13 @@ class Config extends CommonDBTM
     {
         switch ($authtype) {
             case Auth::DB_GLPI:
-                return $this->fields['local'];
+                return $this->fields['local'] ?? false;
             case Auth::LDAP:
-                return $this->fields['ldap'];
+                return $this->fields['ldap'] ?? false;
             case Auth::MAIL:
-                return $this->fields['mail'];
+                return $this->fields['mail'] ?? false;
             case Auth::EXTERNAL:
-                return $this->fields['external'];
+                return $this->fields['external'] ?? false;
             case Auth::CAS:
             case Auth::X509:
                 return $this->fields['other'] ?? false;

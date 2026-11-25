@@ -97,9 +97,11 @@ final class Guard
 
     /** Scripts reachable while the code is pending (paths relative to the GLPI root). */
     private const EXEMPT_PATHS = [
-        '/plugins/mfa/front/mfa.form.php',
         '/front/logout.php',
     ];
+
+    /** The code form is served under /plugins/ or /marketplace/ depending on where the plugin is installed. */
+    private const CODE_FORM_PATTERN = '#^/(?:plugins|marketplace)/mfa/front/mfa\.form\.php$#';
 
     /**
      * Hooked on `post_init`: runs on every request, before any controller.
@@ -523,12 +525,12 @@ final class Guard
 
     private static function isExemptRequest(): bool
     {
-        return in_array(self::requestPath(), self::EXEMPT_PATHS, true);
+        return in_array(self::requestPath(), self::EXEMPT_PATHS, true) || self::isCodeFormRequest();
     }
 
     private static function isCodeFormRequest(): bool
     {
-        return self::requestPath() === '/plugins/mfa/front/mfa.form.php';
+        return preg_match(self::CODE_FORM_PATTERN, self::requestPath()) === 1;
     }
 
     /**
