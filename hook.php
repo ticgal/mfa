@@ -1,4 +1,5 @@
 <?php
+
 /*
  -------------------------------------------------------------------------
  MFA plugin for GLPI
@@ -22,172 +23,121 @@
  @author    the TICGAL team
  @copyright Copyright (c) 2026 TICGAL team
  @license   AGPL License 3.0 or (at your option) any later version
-				http://www.gnu.org/licenses/agpl-3.0-standalone.html
+                http://www.gnu.org/licenses/agpl-3.0-standalone.html
  @link      https://www.tic.gal
  @since     2022
  ----------------------------------------------------------------------
 */
 
+use GlpiPlugin\Mfa\Config;
+use GlpiPlugin\Mfa\Guard;
+use GlpiPlugin\Mfa\Mfa;
+use GlpiPlugin\Mfa\NotificationTargetMfa;
+
+/**
+ * Classes taking part in install/uninstall, in install order.
+ *
+ * @return class-string[]
+ */
+function plugin_mfa_get_classes(): array
+{
+    return [
+        Config::class,
+        Mfa::class,
+        NotificationTargetMfa::class,
+    ];
+}
+
+/**
+ * Itemtypes were renamed when the classes moved to `src/` (v3.0.0). Rewrite the
+ * ones stored in the database so existing notifications, templates and cron
+ * tasks keep pointing to the plugin classes.
+ */
+function plugin_mfa_migrate_itemtypes(): void
+{
+    global $DB;
+
+    $old = 'PluginMfaMfa';
+    $new = Mfa::class;
+
+    // Cron tasks are unique per (itemtype, name): when the new class has already
+    // registered its task, drop the old row instead of renaming it.
+    if ($DB->tableExists('glpi_crontasks')) {
+        $cron = new CronTask();
+        foreach ($DB->request(['FROM' => 'glpi_crontasks', 'WHERE' => ['itemtype' => $old]]) as $row) {
+            if (countElementsInTable('glpi_crontasks', ['itemtype' => $new, 'name' => $row['name']]) > 0) {
+                $cron->delete(['id' => $row['id']], true);
+            }
+        }
+    }
+
+    foreach (['glpi_notificationtemplates', 'glpi_notifications', 'glpi_crontasks'] as $table) {
+        if (!$DB->tableExists($table)) {
+            continue;
+        }
+        $DB->update($table, ['itemtype' => $new], ['itemtype' => $old]);
+    }
+}
+
 function plugin_mfa_install()
 {
-	$migration = new Migration(PLUGIN_MFA_VERSION);
+    $migration = new Migration(PLUGIN_MFA_VERSION);
 
-	foreach (glob(dirname(__FILE__) . '/inc/*') as $filepath) {
-		if (preg_match("/inc.(.+)\.class.php/", $filepath, $matches)) {
-			$classname = 'PluginMfa' . ucfirst($matches[1]);
-			include_once($filepath);
-			if (method_exists($classname, 'install')) {
-				$classname::install($migration);
-			}
-		}
-	}
-	$migration->executeMigration();
+    plugin_mfa_migrate_itemtypes();
 
-	return true;
+    foreach (plugin_mfa_get_classes() as $classname) {
+        if (method_exists($classname, 'install')) {
+            $classname::install($migration);
+        }
+    }
+    $migration->executeMigration();
+
+    return true;
 }
 
 function plugin_mfa_uninstall()
 {
-	$migration = new Migration(PLUGIN_MFA_VERSION);
+    $migration = new Migration(PLUGIN_MFA_VERSION);
 
-	foreach (glob(dirname(__FILE__) . '/inc/*') as $filepath) {
-		if (preg_match("/inc.(.+)\.class.php/", $filepath, $matches)) {
-			$classname = 'PluginMfa' . ucfirst($matches[1]);
-			include_once($filepath);
-			if (method_exists($classname, 'uninstall')) {
-				$classname::uninstall($migration);
-			}
-		}
-	}
-	$migration->executeMigration();
+    foreach (plugin_mfa_get_classes() as $classname) {
+        if (method_exists($classname, 'uninstall')) {
+            $classname::uninstall($migration);
+        }
+    }
+    $migration->executeMigration();
 
-	return true;
+    return true;
 }
 
 /**
- * Request-time enforcement of the second factor.
- *
- * Runs on POST_INIT for every request, after the session has been started (the
- * SessionStart listener runs before plugin initialization) and before any page is
- * rendered. If the current user is authenticated but has not yet passed this
- * plugin's code in the current session, every request is redirected to the
- * challenge except the challenge itself, logout and the static assets the
- * challenge page needs. This is what makes the control effective for /front/login.php
- * and for SSO/CAS/x509/remember-me logins, none of which post to the plugin.
+ * Called by the core every time the plugin is activated.
  */
-function plugin_mfa_enforce()
+function plugin_mfa_activate(): void
 {
-	// The CLI never goes through this interactive challenge.
-	if (isCommandLine()) {
-		return;
-	}
+    Guard::markActivation();
 
-	$request = PluginMfaRequestpath::getCurrentRequest();
+    // A configuration kept from a previous installation applies as soon as the plugin is active.
+    $queue_warning = Mfa::queueWarning();
+    if ($queue_warning !== null) {
+        Session::addMessageAfterRedirect($queue_warning, false, WARNING);
+    }
 
-	// API paths are token-based and stateless: the enforcement hook must not open a
-	// cookie session for them (it would break token authentication), and the plugin
-	// does not cover the token/credential API channels (see README). The single
-	// exception is the OAuth authorization endpoint, which completes an interactive
-	// login from the browser's web-session cookie and is therefore a real bypass of
-	// the second factor if left alone.
-	if (isAPI()) {
-		if (PluginMfaRequestpath::isOAuthAuthorizePath($request)) {
-			plugin_mfa_enforce_oauth_authorize();
-		}
-		return;
-	}
-
-	$users_id = (int) Session::getLoginUserID();
-	if ($users_id <= 0) {
-		// Not authenticated yet: the login page and its assets must work normally.
-		return;
-	}
-
-	if (!PluginMfaMfa::userMustVerify($users_id)) {
-		return;
-	}
-
-	if (PluginMfaMfa::isAllowedWhileUnverified($request)) {
-		return;
-	}
-
-	// Remember where the user was heading so the challenge can send them back.
-	// Only a local path from the server is stored; it is never taken from a
-	// user-supplied parameter, so it cannot become an open redirect.
-	if (empty($_SESSION['plugin_mfa_pending']['redirect'])) {
-		$_SESSION['plugin_mfa_pending']['redirect'] = $_SERVER['REQUEST_URI'] ?? '';
-	}
-
-	plugin_mfa_redirect_to_challenge();
+    $problem = Mfa::configurationProblem();
+    if ($problem !== null && Config::hasSourceEnabled()) {
+        Session::addMessageAfterRedirect(
+            $problem . ' ' . __('The stored MFA configuration requires a code for some users, so they will not be able to sign in. Fix the notifications, or set the authentication types to "No" in the MFA tab of the general configuration.', 'mfa'),
+            false,
+            WARNING,
+        );
+    }
 }
 
-/**
- * Enforce the second factor on the HL API OAuth authorization endpoint.
- *
- * `/api.php/.../authorize` is a stateless route, so no session was started during
- * boot. Core's CookieAuthMiddleware opens the web session from the browser cookie
- * and treats the logged-in user as authenticated; without this, an attacker holding
- * the password could log in, skip the e-mailed code and still obtain an OAuth
- * authorization code for the victim. We open the same session, and if the user still
- * owes the plugin code we send them to the challenge instead of letting the endpoint
- * issue a code. A verified session is left exactly as the middleware expects (active,
- * cookies enabled), so the normal OAuth consent flow is unaffected.
- */
-function plugin_mfa_enforce_oauth_authorize()
+function plugin_mfa_init_session(): void
 {
-	// Mirror Glpi\Api\HL\Middleware\CookieAuthMiddleware: start the web session from
-	// the cookie so getLoginUserID() can see a cookie-authenticated user.
-	if (session_status() !== PHP_SESSION_ACTIVE) {
-		$use_cookies = filter_var(ini_get('session.use_cookies'), FILTER_VALIDATE_BOOLEAN);
-		if ($use_cookies !== true) {
-			ini_set('session.use_cookies', '1');
-		}
-		Session::start();
-	}
-
-	$users_id = (int) Session::getLoginUserID();
-	if ($users_id <= 0) {
-		// Not authenticated by cookie: the OAuth flow redirects to login by itself.
-		return;
-	}
-
-	if (!PluginMfaMfa::userMustVerify($users_id)) {
-		return;
-	}
-
-	// Come back to the authorize request (with its OAuth parameters) after the code
-	// is verified, so the consent flow continues where it left off.
-	if (empty($_SESSION['plugin_mfa_pending']['redirect'])) {
-		$_SESSION['plugin_mfa_pending']['redirect'] = $_SERVER['REQUEST_URI'] ?? '';
-	}
-
-	plugin_mfa_redirect_to_challenge();
+    Guard::onSessionInit();
 }
 
-/**
- * Send the current request to the challenge page and stop it.
- *
- * Runs during the kernel boot phase (POST_INIT), before the controller is
- * dispatched, so Html::redirect()'s RedirectException would not be caught by the
- * kernel. Emit the redirect directly and stop the request; the session is flushed so
- * the pending state persists.
- *
- * Fails closed: if output has already started we cannot redirect, so the request is
- * stopped rather than allowed to render the protected page without the code.
- */
-function plugin_mfa_redirect_to_challenge()
+function plugin_mfa_post_init(): void
 {
-	global $CFG_GLPI;
-
-	if (headers_sent()) {
-		Toolbox::logInFile(
-			'mfa',
-			"Unable to redirect to the MFA challenge: output already started; request stopped.\n"
-		);
-		exit();
-	}
-
-	session_write_close();
-	header('Location: ' . $CFG_GLPI['root_doc'] . '/plugins/mfa/front/mfa.form.php', true, 302);
-	exit();
+    Guard::enforce();
 }

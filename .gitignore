@@ -1,4 +1,4 @@
-/docs/
-/docs/findings/
-/docs/plans/
 /nbproject/*
+/docs/plans/
+/.php-cs-fixer.cache
+/vendor/

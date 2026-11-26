@@ -12,48 +12,54 @@ An OTP plugin for GLPI
 
 Please check the info here: https://tic.gal/en/mfa-for-glpi-does-exactly-what-you-think/
 
-# Scope and limitations
+# Requirements and recovery
 
-- The plugin adds an e-mailed one-time code to **interactive web logins** (local, LDAP,
-  mail server and external authentication, as enabled in its configuration). It is
-  enforced on the server for every request, so it also covers SSO/CAS/x509 and
-  remember-me logins.
-- It does **not** add a second factor to the GLPI REST API (`/apirest.php`) or the
-  High-Level API (`/api.php`, including the OAuth password grant). If those channels
-  must be covered, disable credential/password login for them and use application
-  tokens or the OAuth authorization-code flow instead.
-- If a user is covered by GLPI's native 2FA (TOTP), the native factor is used and the
-  plugin does not ask for an additional code.
-- The per-user lock that protects the attempt rate limiter is a local file lock, so the
-  5-attempts-per-15-minutes guarantee holds on a **single node**. A multi-node
-  deployment must use a shared cache backend for the rate limiter to be effective
-  across nodes.
-- The one-time code is stored hashed in the plugin table, but the notification carries
-  it in clear text and GLPI keeps the sent notification body in its queue. The queue
-  views and APIs mask it, but a reader with direct database access can still read it
-  until the row is purged.
+The security code is sent by e-mail, so GLPI e-mail notifications must be enabled, the notification
+"One-Time Security Code generated" must be active, and every user covered by MFA needs an e-mail address.
+The configuration tab warns when notifications are disabled. If nobody can sign in because codes cannot be
+delivered, deactivate the plugin from the console and fix the setup:
 
-# Locked out?
+    php bin/console plugin:deactivate mfa
 
-The one-time code is sent by e-mail, so GLPI e-mail notifications must be enabled
-(Setup > Notifications) and the automatic action "Send mails in queue" must be enabled
-(Setup > Automatic actions), otherwise notifications are queued but never sent. Do this
-before an authentication source is switched on in the MFA tab; the plugin refuses to
-switch a source on while they are not operative. It cannot verify that the mail server
-itself works.
+If the plugin folder was deleted without uninstalling it, its tables (`glpi_plugin_mfa_configs`,
+`glpi_plugin_mfa_mfas`) stay in the database with their configuration, and that configuration applies again as soon
+as the plugin is reinstalled. If e-mail cannot be delivered, either fix the notifications or clean it up first:
+uninstall the plugin properly, drop the two tables, or set the authentication types to "No":
 
-If users are asked for a code that never arrives (for example after reinstalling over
-the table of a previous version, or after notifications were turned off), recover with
-one of these:
+    UPDATE glpi_plugin_mfa_configs SET local = 0, mail = 0, ldap = 0, external = 0;
 
-- Enable e-mail notifications and the "Send mails in queue" automatic action, and make sure the "Security code" notification works.
-- Switch the sources off in the database:
-  `UPDATE glpi_plugin_mfa_configs SET local = 0, mail = 0, ldap = 0, external = 0 WHERE id = 1;`
-- Disable the plugin from the console: `php bin/console glpi:plugin:deactivate mfa`.
+The configuration tab refuses to turn an authentication type on while codes cannot be delivered, and activating the
+plugin warns when a stored configuration would lock users out.
 
-Always remove the plugin with **Uninstall** in GLPI before deleting its folder. Deleting
-the folder leaves the `glpi_plugin_mfa_configs` table behind and a later install keeps
-its old values (a version before 2.0.3 created it with the local source switched on).
+## What the plugin covers
+
+The code is enforced on every web request, whatever opened the session (login form, "remember me" cookie...).
+While a code is pending the session carries no user at all: its identity is kept aside by the plugin and put
+back once the code is verified, so the legacy REST API (`Session-Token`), the high-level API authorisation
+endpoint or any other code that trusts the session find nobody logged in.
+
+| Entry point | Behaviour |
+|---|---|
+| Web login (form, "remember me" cookie) | Code required |
+| Legacy REST API `initSession` with login and password | Refused when the account needs a code |
+| CalDAV (password only) | Refused when the account needs a code |
+| High-level API OAuth `password` grant | Refused when the account needs a code |
+| Impersonation | Allowed from a verified session, no new code |
+| Legacy REST API `initSession` with `user_token`, OAuth tokens already issued, command line | Not covered: a token is a different credential, not the password |
+
+Users with GLPI native 2FA are not asked twice, but only when their TOTP existed before the login started. A TOTP
+enrolled during the login (core "/MFA/Setup" step) does not count, because whoever typed the password created it.
+A user who skips a native 2FA setup during a grace period has verified no second factor and is asked for the code.
+
+Limitations:
+- The guard runs in the `post_init` hook. While GLPI suspends plugin execution (after a core update until an
+  administrator resumes it, or manually) no guard runs and logins complete without the code.
+- The account type decides who needs a code: local, mail, LDAP, external (SSO) and CAS/x509 each have their own
+  switch. Any other type is never asked for a code.
+- A TOTP enrolled by whoever typed the password in the native 2FA setup step stays on the account (core behaviour).
+  The plugin no longer treats it as a second factor, but an administrator has to reset it.
+- Limits are per user: someone who knows a password can lock the real user out for 15 minutes.
+- The code is always asked for on a new session, including when it is restored from a "remember me" cookie.
 
 # Contribute
 

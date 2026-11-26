@@ -1,4 +1,5 @@
 <?php
+
 /*
  -------------------------------------------------------------------------
  MFA plugin for GLPI
@@ -28,120 +29,56 @@
  ----------------------------------------------------------------------
 */
 
-require_once('../../../front/_check_webserver_config.php');
+
+use GlpiPlugin\Mfa\Guard;
+use GlpiPlugin\Mfa\Mfa;
 
 global $CFG_GLPI;
 
-// ---------------------------------------------------------------------------
-// Second-factor challenge (step-up).
-//
-// The user reaches this page AFTER GLPI has authenticated the credentials: the
-// login itself goes through the normal /front/login.php. The request-time
-// enforcement hook (plugin_mfa_enforce) redirects an authenticated-but-unverified
-// user here and blocks every other page until the code is verified. This page
-// therefore never handles credentials and never writes the native `mfa_pre_auth`
-// / `mfa_success` session keys, which the core 2FA setup/verify routes would
-// otherwise accept as proof of the first factor.
-// ---------------------------------------------------------------------------
-
-$users_id = (int) Session::getLoginUserID();
-
-if ($users_id <= 0) {
-    // Not authenticated (e.g. direct hit): nothing to step up.
-    Html::redirect($CFG_GLPI["root_doc"] . "/index.php");
+// The guard (post_init) has already evaluated this session. Anyone who is not waiting
+// for a code has nothing to do here.
+if (!Guard::isPending()) {
+    Auth::redirectIfAuthenticated();
+    Html::redirect($CFG_GLPI['root_doc'] . '/index.php');
 }
 
-// Already cleared, or this session does not require the plugin code: send the
-// user on to where they were going.
-if (!PluginMfaMfa::userMustVerify($users_id)) {
-    $redirect = $_SESSION['plugin_mfa_pending']['redirect'] ?? '';
-    unset($_SESSION['plugin_mfa_pending']);
-    if (is_string($redirect) && $redirect !== '' && str_starts_with($redirect, '/')) {
-        Html::redirect($redirect);
-    }
-    Html::redirect($CFG_GLPI["root_doc"] . "/front/central.php");
-}
+$users_id = Guard::getPendingUserId();
+$error    = null;
 
 if (isset($_POST['code'])) {
-    // -----------------------------------------------------------------------
-    // Verify the one-time code against this session's own pending challenge.
-    // -----------------------------------------------------------------------
-    $mfa_id = (int) ($_SESSION['plugin_mfa_pending']['mfa_id'] ?? 0);
-
-    // Rate-limit verification attempts per user: the code is only 6 digits, so
-    // without a lock-out it is brute-forceable by anyone who has the password.
-    if (!PluginMfaMfa::consumeAttempt($users_id)) {
-        Html::nullHeader("Login", $CFG_GLPI["root_doc"] . '/index.php');
+    if (!Mfa::consumeAttempt($users_id)) {
+        // The code is only 6 digits: without a lock-out it is brute-forceable by anyone
+        // who has the password.
+        Html::nullHeader('Login', $CFG_GLPI['root_doc'] . '/index.php');
         echo '<div class="center b" style="color:red">' . __('Too many failed attempts. Please try again later.', 'mfa') . '</div>';
-        echo '<div class="center"><br><a class="btn btn-primary" href="' . $CFG_GLPI["root_doc"] . '/front/logout.php?noAUTO=1">' . __('Log in again') . '</a></div>';
+        echo '<div class="center"><br><a class="btn btn-primary" href="' . $CFG_GLPI['root_doc'] . '/front/logout.php?noAUTO=1">' . __('Log in again') . '</a></div>';
         Html::nullFooter();
-        exit();
+        return;
     }
 
     // Force the code to a scalar string. If it arrives as an array, GLPI's criteria
     // parser could read `['LIKE', '%']` as an operator+value pair and match any code.
     $code = is_scalar($_POST['code']) ? (string) $_POST['code'] : '';
 
-    // Verify against this session's pending code (bound to users_id and the challenge
-    // id held server side, stored hashed, rejected if expired, consumed atomically).
-    if (PluginMfaMfa::verifyCode($users_id, $code, $mfa_id)) {
-        $redirect = $_SESSION['plugin_mfa_pending']['redirect'] ?? '';
+    // Verify against the user's own pending code (bound to users_id, stored hashed,
+    // rejected if expired). Consumes the code on success.
+    if (Mfa::verifyCode($users_id, $code)) {
+        Mfa::clearAttempts($users_id);
+        $redirect = Guard::markVerified();
 
-        PluginMfaMfa::clearAttempts($users_id);
-        PluginMfaMfa::markVerified();
-
-        if (is_string($redirect) && $redirect !== '' && str_starts_with($redirect, '/')) {
-            Html::redirect($redirect);
+        if ($redirect !== null) {
+            // Validated by the core: only local destinations are followed.
+            Toolbox::manageRedirect($redirect);
         }
-        Html::redirect($CFG_GLPI["root_doc"] . "/front/central.php");
-    } else {
-        // Incorrect code
-        Html::nullHeader("Login", $CFG_GLPI["root_doc"] . '/index.php');
-        echo '<div class="center b" style="color:red">' . __('Incorrect One-Time Security Code', 'mfa') . '</div>';
-        echo '<div class="center"><br><a class="btn btn-primary" href="' . $CFG_GLPI["root_doc"] . '/plugins/mfa/front/mfa.form.php">' . __('Try again', 'mfa') . '</a></div>';
-        echo '<div class="center"><br><a class="btn btn-secondary" href="' . $CFG_GLPI["root_doc"] . '/front/logout.php?noAUTO=1">' . __('Log in again') . '</a></div>';
-        Html::nullFooter();
-        exit();
-    }
-}
-
-// -----------------------------------------------------------------------
-// Render the challenge. Reuse a still-valid pending code, otherwise issue a
-// fresh one (subject to the per-user issuance throttle) so that navigating
-// while unverified does not re-send a code on every request.
-// -----------------------------------------------------------------------
-if (!PluginMfaConfig::isMailAvailable()) {
-    // The code can only be delivered by e-mail. Say so instead of showing a form that
-    // waits for a code that will never arrive. Access is NOT granted: the session
-    // stays unverified (fail closed).
-    Html::nullHeader("Login", $CFG_GLPI["root_doc"] . '/index.php');
-    echo '<div class="center b" style="color:red">' . __('The one-time code cannot be sent because e-mail notifications are not operative in GLPI. Please contact your administrator.', 'mfa') . '</div>';
-    echo '<div class="center"><br><a class="btn btn-secondary" href="' . $CFG_GLPI["root_doc"] . '/front/logout.php?noAUTO=1">' . __('Log in again') . '</a></div>';
-    Html::nullFooter();
-    exit();
-}
-
-$mfa_id = (int) ($_SESSION['plugin_mfa_pending']['mfa_id'] ?? 0);
-
-if (!PluginMfaMfa::isPendingValid($users_id, $mfa_id)) {
-    if (!PluginMfaMfa::consumeIssue($users_id)) {
-        Html::nullHeader("Login", $CFG_GLPI["root_doc"] . '/index.php');
-        echo '<div class="center b" style="color:red">' . __('Too many codes requested. Please wait a moment and try again.', 'mfa') . '</div>';
-        echo '<div class="center"><br><a class="btn btn-primary" href="' . $CFG_GLPI["root_doc"] . '/plugins/mfa/front/mfa.form.php">' . __('Try again', 'mfa') . '</a></div>';
-        echo '<div class="center"><br><a class="btn btn-secondary" href="' . $CFG_GLPI["root_doc"] . '/front/logout.php?noAUTO=1">' . __('Log in again') . '</a></div>';
-        Html::nullFooter();
-        exit();
+        Auth::redirectIfAuthenticated();
+        Html::redirect($CFG_GLPI['root_doc'] . '/index.php');
     }
 
-    // Any failure while issuing (DB, notification, template) must leave the user
-    // unverified, not grant access. The enforcement hook keeps blocking an
-    // unverified session, so a thrown exception here is fail-closed by design.
-    $mfa_id = PluginMfaMfa::issueCode($users_id);
-    $_SESSION['plugin_mfa_pending']['mfa_id'] = $mfa_id;
-    $_SESSION['plugin_mfa_pending']['users_id'] = $users_id;
+    $error = __('Incorrect One-Time Security Code', 'mfa');
 }
 
-Html::nullHeader("Login", $CFG_GLPI["root_doc"] . '/index.php');
-PluginMfaMfa::showCodeForm();
+Guard::retryDelivery();
+
+Html::nullHeader('Login', $CFG_GLPI['root_doc'] . '/index.php');
+Mfa::showCodeForm($error, Guard::getNotice());
 Html::nullFooter();
-exit();

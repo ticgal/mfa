@@ -1,4 +1,5 @@
 <?php
+
 /*
  -------------------------------------------------------------------------
  MFA plugin for GLPI
@@ -22,42 +23,42 @@
  @author    the TICGAL team
  @copyright Copyright (c) 2026 TICGAL team
  @license   AGPL License 3.0 or (at your option) any later version
-				http://www.gnu.org/licenses/agpl-3.0-standalone.html
+                http://www.gnu.org/licenses/agpl-3.0-standalone.html
  @link      https://www.tic.gal
  @since     2022
  ----------------------------------------------------------------------
 */
+
+use GlpiPlugin\Mfa\Config;
 
 global $CFG_GLPI;
 
 // Check if plugin is activated...
 $plugin = new Plugin();
 if (!$plugin->isInstalled('mfa') || !$plugin->isActivated('mfa')) {
-	throw new Symfony\Component\HttpKernel\Exception\NotFoundHttpException();
+    throw new Symfony\Component\HttpKernel\Exception\NotFoundHttpException();
 }
 
-Session::checkRight('config', UPDATE);
+Session::checkRight(Config::$rightname, UPDATE);
+Config::checkReAuthenticationOrRedirect();
 
-$config = new PluginMfaConfig();
+// Html::back() relies on the Referer header (and drops `forcetab` from it): without a
+// Referer it sends the user to the GLPI home page. Always return to the MFA tab instead.
+$config_tab_url = $CFG_GLPI["root_doc"] . "/front/config.form.php?forcetab=" . urlencode(Config::class . '$1');
+
+$config = new Config();
 if (isset($_POST["update"])) {
-	$config->check($_POST['id'], UPDATE);
-
-	// The one-time code is sent by e-mail. Refuse to switch a source on while e-mail
-	// notifications are off: every user of that source (the administrator included)
-	// would be locked out at the next request. Switching sources off, or leaving the
-	// ones already on, is always allowed so the situation can be repaired.
-	$config->getFromDB((int) $_POST['id']);
-	if (!PluginMfaConfig::isMailAvailable() && !empty($config->getNewlyEnabledSources($_POST))) {
-		Session::addMessageAfterRedirect(
-			__('The configuration was not saved: E-mail notifications are not operative (disabled, or the "Send mails in queue" automatic action is disabled), so the one-time code could not be sent and the users of the enabled sources would be locked out. Make e-mail notifications work first.', 'mfa'),
-			false,
-			ERROR
-		);
-		Html::back();
-	}
-
-	$config->update($_POST);
-	Html::back();
+    $config->check((int) ($_POST['id'] ?? 0), UPDATE);
+    $config->update($_POST);
 }
 
-Html::redirect($CFG_GLPI["root_doc"] . "/front/config.form.php?forcetab=" . urlencode('PluginMfaConfig$1'));
+// A script (fetch, XHR) cannot follow a navigation, so it gets the destination as JSON. This
+// runs after every access check above; the URL is always built here, never from the request.
+if (Config::isScriptedRequest()) {
+    header('Content-Type: application/json; charset=UTF-8');
+    header('Vary: Accept, Sec-Fetch-Mode, X-Requested-With');
+    echo json_encode(['redirect' => $config_tab_url], JSON_THROW_ON_ERROR);
+    return;
+}
+
+Html::redirect($config_tab_url);

@@ -1,4 +1,5 @@
 <?php
+
 /*
  -------------------------------------------------------------------------
  MFA plugin for GLPI
@@ -28,11 +29,16 @@
  ----------------------------------------------------------------------
 */
 
-define('PLUGIN_MFA_VERSION', '2.0.3');
-define('PLUGIN_MFA_MIN_GLPI', '11.0.0');
-define('PLUGIN_MFA_MAX_GLPI', '11.0.99');
-
+use Glpi\Http\Firewall;
 use Glpi\Plugin\Hooks;
+use GlpiPlugin\Mfa\Config;
+use GlpiPlugin\Mfa\Mfa;
+
+use function Safe\define;
+
+define('PLUGIN_MFA_VERSION', '3.0.2');
+define('PLUGIN_MFA_MIN_GLPI', '12.0.0');
+define('PLUGIN_MFA_MAX_GLPI', '12.0.99');
 
 function plugin_version_mfa()
 {
@@ -45,9 +51,9 @@ function plugin_version_mfa()
         'requirements' => [
             'glpi' => [
                 'min' => PLUGIN_MFA_MIN_GLPI,
-                'max' => PLUGIN_MFA_MAX_GLPI
-            ]
-        ]
+                'max' => PLUGIN_MFA_MAX_GLPI,
+            ],
+        ],
     ];
 }
 
@@ -57,17 +63,21 @@ function plugin_init_mfa()
 
     $plugin = new Plugin();
     if ($plugin->isActivated('mfa')) {
-        Plugin::registerClass('PluginMfaConfig', ['addtabon' => 'Config']);
+        // Server-side enforcement: whatever created the session, no page is served
+        // until the one-time code has been verified.
+        $PLUGIN_HOOKS[Hooks::POST_INIT]['mfa'] = 'plugin_mfa_post_init';
+        // Session::init() wipes the session; see Guard::onSessionInit().
+        $PLUGIN_HOOKS[Hooks::INIT_SESSION]['mfa'] = 'plugin_mfa_init_session';
+
+        // While a code is pending the session has no user (see Guard), so the code form cannot
+        // require an authenticated one; the guard itself decides who may reach it.
+        Firewall::addPluginStrategyForLegacyScripts('mfa', '#^/front/mfa\.form\.php$#', Firewall::STRATEGY_NO_CHECK);
+
+        Plugin::registerClass(Config::class, ['addtabon' => 'Config']);
         $PLUGIN_HOOKS[Hooks::CONFIG_PAGE]['mfa'] = 'front/config.form.php';
 
-        Plugin::registerClass('PluginMfaMfa', [
+        Plugin::registerClass(Mfa::class, [
             'notificationtemplates_types' => true,
         ]);
-
-        // Enforce the second factor on the server, on every request, after the
-        // core has authenticated the user. This covers all login paths (form,
-        // SSO/CAS/x509, remember-me cookie) instead of relying on a client-side
-        // redirect of the login form, which /front/login.php bypassed.
-        $PLUGIN_HOOKS[Hooks::POST_INIT]['mfa'] = 'plugin_mfa_enforce';
     }
 }

@@ -110,7 +110,6 @@ cd /tmp/$PLUGINNAME
 
 echo "Delete various scripts and directories"
 rm -rf RoboFile.php
-rm -rf docs
 rm -rf tools
 rm -rf phpunit
 rm -rf tests
