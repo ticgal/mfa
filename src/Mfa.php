@@ -399,7 +399,7 @@ class Mfa extends CommonDBTM
         }
 
         // Registered here, not on every request: it only has to exist once.
-        $migration->addCrontask(self::class, 'expiredSecurityCode', HOUR_TIMESTAMP, 5);
+        $migration->addCrontask(self::class, 'expiredSecurityCode', HOUR_TIMESTAMP, self::CODE_TTL_MINUTES);
     }
 
     public static function uninstall(Migration $migration)

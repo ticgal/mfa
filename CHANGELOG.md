@@ -1,5 +1,18 @@
 # MFA
 
+## 3.0.2 - 2016-11-25
+## Bugfixes
+- The code form no longer fails with a fatal error when the plugin is installed in a directory outside the
+  GLPI root (marketplace directory): the relative `require_once` of `front/mfa.form.php` was removed.
+  Users who had to enter a code got "An error occurred" and could not sign in.
+- The code form is recognised when served under `/marketplace/mfa/` as well as `/plugins/mfa/`, which
+  avoids a redirection loop.
+- The code is no longer checked against a missing configuration row (PHP warnings at every login).
+- The automatic action that deletes expired codes is registered with the same lifetime as the code
+  (10 minutes instead of 5), so it no longer removes codes that are still valid. Installations that already
+  have the action keep their value: change the parameter in Setup > Automatic actions.
+- The configuration form no longer raises a warning when the `id` field is missing.
+
 ## 3.0.1 - 2026-11-09
 ## Security
 - A session waiting for its code no longer counts as authenticated for anything that reads the session

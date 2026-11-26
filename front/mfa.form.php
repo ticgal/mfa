@@ -30,8 +30,6 @@
 */
 
 
-require_once('../../../front/_check_webserver_config.php');
-
 use GlpiPlugin\Mfa\Guard;
 use GlpiPlugin\Mfa\Mfa;
 

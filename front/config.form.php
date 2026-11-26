@@ -48,7 +48,7 @@ $config_tab_url = $CFG_GLPI["root_doc"] . "/front/config.form.php?forcetab=" . u
 
 $config = new Config();
 if (isset($_POST["update"])) {
-    $config->check($_POST['id'], UPDATE);
+    $config->check((int) ($_POST['id'] ?? 0), UPDATE);
     $config->update($_POST);
 }
 
